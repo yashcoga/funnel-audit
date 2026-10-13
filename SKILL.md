@@ -1,48 +1,45 @@
 ---
 name: funnel-audit
-description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a real test opt-in, runs the checkout with a test/promo code, checks the Meta/Google/TikTok pixel events, audits copy on desktop and mobile, and measures page speed. Produces a prioritised fix list. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
+description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places $0 test purchases with a test/promo code, checks Meta/Google/TikTok pixel events, does a full copy and conversion review on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
 ---
 
 # Funnel audit
 
 The user gives a **starting page** (usually the opt-in). Everything else is discovered by walking the funnel.
-Optional inputs: a **test/promo code** for the checkout, a **marketing sheet** (Google Sheet with event dates,
-funnel links, Zoom links), and any earlier **fix list** in the project folder.
+Optional inputs: a **test/promo code** (100% off) for the checkout, a **marketing sheet** (Google Sheet with event
+dates, funnel links, Zoom links), and an earlier **fix list** in the project folder.
 
-The user wants short, plain progress messages and a finished report they can work from and share with their team.
-Ask only when blocked (see "Stop and ask").
+The user wants short, plain progress messages (one line per step, no jargon) and a finished report they can work
+from and share with their team. Ask only when blocked (see "Stop and ask").
+
+**Scripts.** All mechanical work is done by the scripts in this skill's `scripts/` folder. Use the base directory
+shown when this skill loads (normally `~/.claude/skills/funnel-audit`); below, `$S` means `<that folder>/scripts`.
+Run them with the same Python that passed the setup check. Every script prints a short summary, writes JSON, and
+has `--help`. Don't rewrite what a script already does; only use the Playwright browser tools for things no script
+covers (see "Manual fallback").
 
 ## Step 0: check the setup (every run, before anything else)
 
-Run these checks silently and in parallel. If all pass, say nothing about setup and continue.
+1. Run `python "$S/check_setup.py"` (try `python3` or `py` if `python` isn't found). It checks the Python Playwright
+   library and its Chromium, Pillow and Node.js, and prints the exact install command for anything missing. It never
+   reinstalls what already works, so people who already have Playwright are not affected.
+2. If a Google Sheet link was given, check the Sheets connector with ToolSearch
+   `select:mcp__claude_ai_Google_Sheets__get_values`.
 
-| Needed for | Check | Pass when |
-|---|---|---|
-| Browser testing (required) | `ToolSearch` query `select:mcp__playwright__browser_navigate` | the tool schema comes back |
-| Screenshots + PDF (required) | `python -c "import PIL, pymupdf; print('ok')"` (try `python3` / `py` if `python` is missing) | prints `ok` |
-| Lighthouse speed detail (required) | `node --version` and `npx --version` | both print a version |
-| Marketing sheet (only if the user gives a Google Sheet link) | `ToolSearch` query `select:mcp__claude_ai_Google_Sheets__get_values` | the tool schema comes back |
+If anything required is missing, **stop and guide the user** in plain language: list only what's missing, why it's
+needed (one line), and the exact steps for their OS (`check_setup.py` prints them):
 
-If anything fails, **stop and guide the user** in plain language. List only what's missing, say why it's needed in
-one line, and give the exact steps for their operating system (check it with `uname -s` / the platform info):
+- **Python missing:** https://www.python.org/downloads/ (Windows: tick "Add python.exe to PATH", or
+  `winget install Python.Python.3.12`; Mac: `brew install python`). Reopen the terminal.
+- **Python packages / Chromium missing:** offer to run the printed commands
+  (`python -m pip install --upgrade playwright pillow` and `python -m playwright install chromium`) and run them if
+  they say yes. Re-run the check.
+- **Node.js missing** (needed for Lighthouse): https://nodejs.org/ LTS (Windows: `winget install OpenJS.NodeJS.LTS`;
+  Mac: `brew install node`). Reopen the terminal.
+- **Sheets connector missing** (only when a sheet was given): claude.ai → Settings → Connectors → Google Sheets, then
+  restart Claude Code. Or continue without the sheet and say so in the report.
 
-- **Python missing:** install from https://www.python.org/downloads/ (Windows: tick "Add python.exe to PATH" in the
-  installer; or `winget install Python.Python.3.12`. Mac: `brew install python`). Then reopen the terminal.
-- **Pillow / PyMuPDF missing (Python is there):** offer to run it for them —
-  `python -m pip install --upgrade pillow pymupdf` — and run it if they say yes. Re-check afterwards.
-- **Node.js missing:** install the LTS version from https://nodejs.org/ (Windows: `winget install OpenJS.NodeJS.LTS`;
-  Mac: `brew install node`). Then reopen the terminal.
-- **Playwright browser connection missing:** it's an MCP server that lets Claude drive a real browser. The user runs
-  this once in a terminal (not inside the chat), then fully restarts Claude Code (or the VS Code window):
-  `claude mcp add playwright --scope user -- npx @playwright/mcp@latest`
-  Needs Node.js first. If the first browser action later says the browser isn't installed, call the Playwright
-  `browser_install` tool (or have them run `npx playwright install chrome`).
-- **Google Sheets connector missing** (only when a sheet was given): connect Google Sheets in claude.ai →
-  Settings → Connectors, then restart Claude Code. Or skip the sheet: the audit still runs, it just can't compare
-  dates and links against it — say so in the report.
-
-After the missing pieces are installed (and Claude Code restarted where needed), re-run the checks, then show this
-quick guide once and wait for their input if they haven't already given a URL:
+When everything passes, and the user hasn't given a URL yet (or invoked the skill with no URL), show this once:
 
 > **You're set up. To run a funnel audit, send:**
 > Audit this funnel: `<starting page URL, usually the opt-in>`
@@ -50,181 +47,210 @@ quick guide once and wait for their input if they haven't already given a URL:
 > Marketing sheet: `<Google Sheet link>` (optional — used to check dates and links)
 > If you have an earlier fix list, put it in this folder and I'll re-check it.
 >
-> You'll get a clickable PDF and HTML report in this folder: verdict, funnel map, ranked fix list with marked-up
-> screenshots, tracking, page speed, and a test-purchase SOP with the test records to clean up.
-
-If the user invoked the skill with no URL at all, show the same guide (after the setup check) and wait.
+> You'll get one clickable HTML report in this folder: verdict, funnel map, ranked fix list with marked-up
+> screenshots, copy & conversion review, tracking, page speed, and a test-purchase SOP with the test records to
+> clean up.
 
 ## Scope
 
-In scope: page flow, every CTA/link, forms and validation, checkout, redirects, pixel events, copy (desktop + mobile),
-mobile layout, page speed, compliance basics (privacy policy, SMS consent, refund text).
+In scope: page flow, every CTA/link, forms and validation, checkout, redirects, pixel events, copy (desktop +
+mobile, accuracy and conversion), mobile layout, page speed, compliance basics (privacy policy, SMS consent,
+claims, refund text).
 
 **Out of scope:** whether emails/SMS arrive and whether CRM automations fire. That belongs to the automation team,
 not the funnel pages. Don't check inboxes or report on it.
 
 ## Safety rules (always)
 
-- **Opt-in test lead:** use a clearly fake name (`Funnel AuditTest`), a disposable email
-  (`<funnel>-audit-<MMDD>@mailinator.com`) and a fictional phone (`202-555-0123`, the 555-01xx range).
-  Never use the user's own email or a real-looking phone number.
-- **Test purchases (user-approved SOP):** apply the 100%-off test code first, confirm the total reads $0.00, then pay
-  with the Stripe test card `4242 4242 4242 4242`, expiry `12/34`, CVC `123`, a US billing address and the 555-01xx
-  phone (Whop requires a phone; set its country picker to US (+1) by typing "United States" — the list is virtualised).
-  Use a different disposable email per purchase. Never use a real card. Without the code a live checkout declines the
-  test card ("This payment could not be processed right now") — that confirms the checkout is live, not a bug.
-  If no test code is given, ask for one before attempting a purchase.
-- **Don't pollute ad data.** Only the one real test opt-in may fire live pixel events. For every other visit — thank-you
-  pages reached without a real purchase, Lighthouse runs, mobile re-checks — block the beacons with Playwright
-  `context.route(...)` and *log* what would have fired:
-  `facebook\.com/tr|google\.com/(rmkt|ccm|pagead)|googleadservices|analytics\.tiktok|t\.whop\.tw/conversions|google-analytics\.com/g/collect`
-  (add `backend\.leadconnectorhq\.com/forms/submit` when re-testing a form you don't want to submit).
+- **Ad pixels are blocked by default** in every script (logged as "would have fired"). Only two things may fire live
+  events: the one real test opt-in (`optin_test.py --submit`) and the $0 test purchases (`whop_checkout.py --submit`).
+- **Test lead:** name `Funnel AuditTest`, a disposable `@mailinator.com` email, fictional phone `2025550123`
+  (555-01xx range). Never the user's own email or a real-looking number. (These are the script defaults.)
+- **Test purchases:** only with a 100%-off test code. `whop_checkout.py --submit` refuses unless the total is $0.00,
+  then pays with the public Stripe test card `4242 4242 4242 4242` (12/34, CVC 123), a US address and the test
+  phone. Use a different email per purchase (the default adds a random number). Never a real card. Without a code
+  a live checkout declines the test card ("This payment could not be processed right now") — expected, not a bug.
+  If no code was given, ask for one before any purchase.
+- **Never send a purchase thank-you page to pagespeed.web.dev** (Google's test fires the live Purchase pixel).
+  `pagespeed.py` refuses thank-you/confirmation URLs; use `lighthouse.py` for those.
 - Do not change anything in the page builder (GoHighLevel etc.), Whop, Meta or the sheet. Findings go in the report.
+- Keep all working files in a temp working folder `W` (the session scratchpad if there is one, e.g.
+  `<scratchpad>/audit-<funnel-slug>`), never in the project folder. Only the final HTML report goes in the project
+  folder.
 
-## Setup
+## Workflow
 
-1. Load Playwright tools with ToolSearch (`browser_navigate`, `browser_run_code_unsafe`, `browser_evaluate`,
-   `browser_network_requests`, `browser_network_request`, `browser_resize`, `browser_snapshot`, `browser_tabs`).
-2. Save screenshots and scratch files in a temp folder (the session scratchpad if there is one, `shots/` inside it),
-   never in the project folder — only the final PDF and HTML go there.
-   Playwright drops logs in `<cwd>/.playwright-mcp/`; move any request-body files you save out of the project.
-3. If a marketing sheet is given: read the tabs that list **event dates** and **funnel links**
-   (often a "Marketing Plan" tab with dates and Zoom links and a "Funnel Testing & Links" tab with page URLs; list the
-   sheet's tabs first and pick the matching ones). Note the next live date, cancelled sessions, the expected funnel
-   URLs and Zoom links.
-4. Look in the project folder for earlier fix lists (PDF/MD) and note which items to re-verify.
-5. Check the current date/time in the event's time zone (ET for US events) — date copy is the #1 thing that goes stale.
+Post one short line to the user as each step starts ("Scanning the opt-in on desktop and mobile…").
 
-## Walk the funnel (desktop 1440×900 first, then mobile 390×844 iPhone UA, `isMobile`, `hasTouch`)
+### 1. Context
 
-For **each page**:
+- Marketing sheet (if given): list its tabs, read the ones with **event dates / Zoom links** and **funnel page
+  links** (often "Marketing Plan" and "Funnel Testing & Links"). Note the next live date, cancelled sessions, the
+  expected funnel URLs, old pages that may still be published.
+- Earlier fix lists in the project folder (PDF/MD/HTML): note each item to re-check.
+- Current date/time in the event's time zone (US events: ET) — stale dates are the most common critical issue.
 
-- Scroll to the bottom in steps (triggers lazy images), back to top, then take a full-page screenshot. Split tall
-  screenshots into ~1800 px strips (desktop) or tile 3–4 strips side by side (mobile) with PIL, and **look at them** —
-  invisible headings (white on white), duplicated paragraphs, empty gaps, broken images only show up visually.
-- `evaluate` to collect: title, meta description, og:image, every `<a>` (text, href, target, visible), every
-  `<button>` (text, id, visible), iframes, images (naturalWidth 0 = broken, alt text, natural vs displayed size),
-  full `innerText` for the copy review, nav timing (TTFB, FCP), and on mobile `scrollWidth` + elements whose
-  right edge is past the viewport (sideways scroll).
-- **Click every CTA.** Record where it goes (URL change, scroll to form/#order, popup). On mobile, after tapping a
-  "buy" CTA, check the checkout form is actually on screen (`iframe.getBoundingClientRect().top` < ~600) —
-  page builders often stack the order summary above the form on mobile.
-- Open FAQ accordions; check they expand.
-- Resolve every external link with `curl -sIL` (calendar links: also read the event date/Zoom ID inside and compare
-  with the sheet; community links: 200?).
+### 2. Walk the funnel
 
-### Opt-in form
+For each page, in order (start page first):
 
-1. Submit empty → note each validation message. 2. Bad email + short phone → note messages.
-3. Check whether the SMS-consent checkbox is **required** (it must be optional — TCPA/A2P 10DLC) and whether the
-   error text references terms that don't exist.
-4. Submit the test lead (safety rules above). Record the redirect URL and the pixel events fired
-   (read `facebook.com/tr` POST bodies: `ev=` name, `cd[value]`, `cd[currency]`, `eid`).
+```
+python "$S/scan_page.py"  URL --out W/scans            # desktop + mobile: data, flags, screenshots
+python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, where it lands, desktop + mobile
+```
 
-### Upsell / downsell / checkout
+- **Look at every screenshot part** the scan prints (`W/scans/<page>-desktop-part-N.png`, `-mobile-part-N.png`)
+  with the Read tool. The flags catch a lot (invisible text, duplicates, sideways scroll, oversized images, dates,
+  missing privacy link), but only looking catches layout and design problems.
+- Read each `FLAG` line. `hidden_element_with_text` is usually the hidden twin of a mobile-only/desktop-only block
+  (normal in GoHighLevel); report it only if it's a leftover (e.g. links to another business). Compare twins:
+  copy_review.py lists every desktop/mobile wording difference.
+- **Opt-in page:** `python "$S/optin_test.py" URL --out W/forms` (dry run: validation messages, whether the SMS
+  consent box is required). Then once, the real test lead: `... --submit`. Its redirect URL is the next page.
+- **Upsell / downsell with a Whop checkout:**
+  `python "$S/whop_checkout.py" URL --out W/checkout --code CODE --device mobile` (dry run: plan, prices, code,
+  whether the checkout is on screen after the "Yes" tap). Then one real `$0` purchase on the upsell and one on the
+  downsell: `... --code CODE --submit` (desktop is fine). Record payment IDs, redirect URLs and the pixel events
+  (look for duplicate Purchase/Lead events and whether Purchase carries value + currency).
+- Follow every "No thanks" chain to its end with test_ctas.py results; scan each new page.
+- Also scan old/unlisted pages from the sheet (e.g. a previous upsell) — are they still published?
+- Other checkout types: see "Manual fallback".
 
-- Note checkout platform, plan IDs and `payment_redirect_url` from the iframe `src`.
-- Check the displayed total matches the page price. Apply the test code; confirm the new total.
-- **Complete one real test purchase on the upsell and one on the downsell** (safety rules SOP). Record the payment ID
-  and the redirect URL. Log every `facebook.com/tr` request during the purchase — including those from inside the
-  checkout iframe (`page.on('request')` sees subframes): many checkouts (Whop) send their own Purchase with value +
-  event ID, so a page-URL Purchase rule on the thank-you page is a **duplicate**. Decode bodies with
-  `urllib.parse.parse_qsl` and report `ev`, `cd[value]`, `cd[currency]`, `cd[eventID]`/`eid` per event.
-- List every test record created (CRM contacts, checkout orders/memberships, pixel events) in the report so the team
-  can clean them up.
-- Click every "No thanks" link and follow the chain to the end (downsell → GA thank-you).
-- Visit purchase thank-you pages **with beacons blocked**; log whether `Purchase` would fire and whether it carries
-  `value` + `currency`, and whether different products share one thank-you page (value can't be told apart).
+### 3. Links, calendar invites, legal pages
 
-### Also check
+`python "$S/check_links.py" --scans W/scans --out W` — status of every link, calendar invite date/time/Zoom link
+(compare with the sheet), and whether /privacy-policy, /terms etc. really exist. Social sites (Facebook groups etc.)
+block automated checks; the script says so — don't report those as broken.
 
-- Old/unused pages from the sheet still published (e.g. a previous upsell) — broken order forms, links to other
-  clients' domains.
-- `/privacy-policy`, `/privacy`, `/terms`, `/terms-and-conditions` and a nonsense path — does a privacy policy exist,
-  and is it linked in the footer? (Meta requires one for lead ads/landing pages that collect data.)
-- Refund/disclaimer text matches the product (e.g. "in-person events" on a free virtual class).
+### 4. Copy & conversion review (always, every page, desktop and mobile)
 
-## Copy review (desktop and mobile)
+`python "$S/copy_review.py" --scans W/scans` then **read `W/scans/copy-review.md` in full** and review it against the
+checklist below. Quote the exact current text and give exact replacement text. Small fixes go in the copy-fix
+table; anything about persuasion goes in the copy & conversion review.
 
-Read the `innerText` of every page and the screenshots. Flag: wrong/past dates or time zones (EST vs EDT/ET),
-dates that differ from the sheet, spelling/grammar, duplicated lines, text that differs between desktop and mobile
-versions of the same block (GHL keeps separate mobile/desktop elements), product names inconsistent across upsell →
-downsell → thank-you, prices inconsistent across pages (e.g. thank-you re-offers $27 after a $17 decline), page
-titles copied from another page, image text typos, leftover "VIP"/old-offer wording, hidden leftover sections.
+**Accuracy & consistency**
+- Every date, time and time zone matches the live schedule (sheet) on every page *and* in the calendar invite
+  (between March and November use ET/EDT, not EST).
+- Prices, product names and what's included are identical across upsell → downsell → checkout → thank-you pages.
+- Page titles, meta descriptions and share images match each page (not copied from another page).
+- Desktop and mobile say the same thing (copy_review.py lists every difference).
+- No leftovers from older offers, other clients or templates.
 
-## Page speed
+**Language**
+- Spelling, grammar, punctuation, capitalisation, duplicated lines, broken bold/italic, missing full stops.
+- Readability: short sentences, plain words; jargon explained; ALL CAPS only for short headlines.
 
-1. **Primary: pagespeed.web.dev in Playwright.** Open one tab per page at
-   `https://pagespeed.web.dev/analysis?url=<encoded page URL>&form_factor=mobile` (all tabs in parallel), wait for
-   "Diagnose performance issues", then read the visible tab panel for both the Mobile and Desktop tabs: the
-   Performance score (the first number before "Performance" in the lab section — don't confuse it with the
-   Accessibility score), FCP, LCP, TBT, CLS, Speed Index, and the real-user "Core Web Vitals Assessment"
-   (Passed/Failed, field LCP/CLS). Keep each tab's final URL — it's a shareable report link for the PDF.
-   **Never send a purchase thank-you page to pagespeed.web.dev** — Google's test browser fires the live Purchase
-   pixel. Run those pages with local Lighthouse (step 2) with beacons blocked.
-   The PageSpeed API (`runPagespeed?...`) needs a free API key from Google Cloud (no paid tier); without one the
-   shared quota is usually exhausted (429).
-2. Local Lighthouse for thank-you pages and for the per-image/per-script detail, in the background, beacons blocked:
-   `npx -y lighthouse@12.2.1 <url> [--preset=desktop] --only-categories=performance --output=json
-   --output-path=<scratch>/lh/<page>-<strategy>.json --chrome-flags="--headless=new"
-   --blocked-url-patterns=*facebook.com/tr* --blocked-url-patterns=*analytics.tiktok.com* …`
-3. Report score, FCP, LCP, TBT, CLS, Speed Index, page weight, request count, and the top opportunities.
-4. Measure image weight directly (`curl -s -o /dev/null -w "%{size_download}"`) — GHL serves original uploads; a
-   1080 px PNG shown at 100 px is a common, easy win. Compare natural vs displayed size.
-5. If testing from outside the US, note regional artefacts (e.g. TikTok is blocked in India, so its pixel times out
-   and inflates "load" time — not a problem for US visitors).
+**Compliance & trust**
+- Results/income claims ("daily leads and sales", "six figures") are backed up, or softened; earnings disclaimer
+  present where results are implied (also Meta ad-policy risk).
+- Scarcity and urgency are true ("seats are limited", countdowns, "only on this page", "last chance").
+- Privacy policy + terms linked; SMS consent optional; refund/legal text fits the page (no "all sales final" on a
+  free opt-in).
 
-## Annotated screenshots (required, every audit)
+**Conversion — opt-in**
+- Headline states a specific outcome for a specific person; sub-headline says what it is (free, live, where, when,
+  how long). Above the fold: headline, promise, date/time, CTA, and ideally a face.
+- Social proof: testimonials with names and results, numbers, logos, credentials of the host. Missing proof is
+  usually the biggest conversion leak for cold ad traffic.
+- CTA text is specific and consistent; the form is reachable fast (popup or near the hero), few required fields.
+- Objections answered (replay? length? is it a pitch? can't attend live?), clear who it's for / not for.
+- Benefits over features; agenda items say what the attendee gets.
 
-Every fix that has to be *found* on a page gets a cropped screenshot with the exact spot marked, so anyone can
-see what to change without hunting. Skip screenshots only for things that aren't visible (pixel events, meta tags,
-speed numbers).
+**Conversion — upsell / downsell**
+- Bridges from the step before ("your seat is saved — now…"); one clear offer; price, what's included and value
+  anchoring; proof; risk reversal or honest terms; the decline link is honest and readable.
+- The downsell is clearly the same thing for less (or less for less) and its "last chance" is true.
+- The checkout's own button and summary match the page (price, product name).
 
-1. Capture after all findings are known, in fresh Playwright contexts (desktop 1440×900; mobile 390×844 at
-   `deviceScaleFactor: 2`) with the ad beacons **and** the form-submit endpoint blocked, so no events or leads fire.
-2. Scroll each page top to bottom first so lazy images load.
-3. Mark the spot by injecting an absolutely positioned `div` (4px solid `#e11d48` border, rounded) around the
-   element's document box (`getBoundingClientRect()` + `scrollX/scrollY`), plus a red label chip with a short
-   plain-language caption ("Duplicate paragraph", "SMS consent is required to register"). Put the label below the box
-   when the box is near the top of the page, and keep it inside the crop.
-4. Screenshot with `fullPage: true` and a `clip` around the marked element with enough context to recognise where it
-   is (about 40–260 px around it). For mobile issues use the mobile context. For "where does the user land" issues
-   (e.g. a CTA that scrolls above the checkout) take the viewport after the tap and add a fixed caption bar.
-5. Wrap each capture in try/catch so one failure doesn't stop the rest. Look at every capture (contact sheet with PIL)
-   and re-take any with a cut-off label or wrong crop.
-6. Things that only show in raw HTML (curl) but not in the browser are hidden elements — confirm in the browser
-   before reporting them as visible problems.
-7. Embed in the report as JPEG data URIs (quality ~80, max 1100 px wide; mobile shown at ~280 px) in a `<figure>` with a
-   caption naming the page and device, placed just before that fix's "Now / Change to" box. In print CSS, keep each
-   figure on one page (`break-inside: avoid`, `max-height: 120mm`) but let long fix cards break.
+**Conversion — thank-you pages**
+- Confirms the right date/time/link, tells buyers exactly how to access what they bought, gives the next steps in
+  order, and gives a reason to show up live (show-up rate). No contradictory re-offers.
 
-## Report
+**Across the funnel**
+- Message match with the ads (ask for ad copy if available; otherwise list it as a check before launch).
+- One consistent promise and product name from ad → opt-in → offers → thank-you.
 
-One report per funnel, written for the person running the audit, who makes the fixes and may share it with their team:
+### 5. Page speed
 
-1. **Verdict** — ready for ads or not, in one line, with the blocking issues.
-2. **Funnel map** — each page URL, what each CTA/link does, where each path ends (tested ✓ / ✗).
-3. **Fix list**, ranked: *Critical (before ads)* → *High* → *Medium* → *Polish*. Each item: page, device, exactly
-   where, what's there now, what to change it to. Use the same "current → change to" format as earlier fix lists.
-4. **Tracking** — events per page, what's missing (value/currency, Lead vs custom events, duplicates).
-5. **Speed** — table per page × mobile/desktop + top fixes.
-6. **Re-check of the previous fix list** (if one exists): done / not done per item.
-7. **Test purchase SOP and clean-up** — the exact steps that worked (code, test card, required fields), payment IDs,
-   and every test record to remove (CRM contacts, checkout orders/memberships, pixel events that fired).
-8. **Not tested and why**, if anything couldn't be tested.
+```
+python "$S/pagespeed.py"  <every non-thank-you page> --out W        # pagespeed.web.dev: scores + report links
+python "$S/lighthouse.py" <thank-you pages + slowest pages> --out W # what exactly is slow, pixels blocked
+```
 
-**Format: a PDF plus the same report as an HTML file, both saved in the project folder** as
-`<Funnel Name> - Funnel Audit.pdf` / `.html` (the user asked for files, not an Artifact). Build one HTML file
-(light theme for print, `@page` A4, white print background, `break-inside: avoid` on figures, tables rows and
-"Now / Change to" boxes but not on whole fix cards, which may be taller than a page), then render it
-with Playwright `page.pdf({ printBackground: true, displayHeaderFooter: true })` with a page-number footer.
-**Everything must be clickable:** every funnel URL, external link (calendar, community, Zoom, the marketing sheet),
-each PageSpeed report link, a top nav, an "All fixes at a glance" index that jumps to each fix, and a
-"Back to all fixes ↑" link on every fix. After rendering, check with `pymupdf` that the page count and link count
-look right, and look at 1–2 rendered pages.
+`pagespeed.py` uses pagespeed.web.dev (free; a `PSI_API_KEY` environment variable switches to the free API).
+Report mobile + desktop scores, LCP, TBT, CLS, the real-visitor Core Web Vitals result, the heaviest images and
+blocking scripts (scan_page.py flags oversized images too). If testing from outside the US, mention regional
+artefacts (e.g. TikTok is blocked in India and its pixel times out locally).
+
+### 6. Marked-up screenshots (required for every visible fix)
+
+Every fix that has to be *found* on a page gets a cropped screenshot with the spot boxed in red and a short label,
+so anyone can see what to change without hunting. Skip only invisible things (pixel events, meta tags, speed).
+
+Write `W/shots.json` (format in `annotate.py --help`): one entry per fix, with the page, device, how to find the
+element (`{"selector": ...}` or `{"text": "regex"}`), an optional `extend` to include a second element, a short
+label, padding, and `before` steps (e.g. click submit first to show errors, tap a CTA). For "where does the user
+land" problems use `"viewport_only": true` with a `caption_bar`. Then:
+
+`python "$S/annotate.py" W/shots.json --out W/shots` → **look at the contact sheets** it prints and re-take any
+shot with a cut-off label or wrong crop (adjust `pad`, `label_pos` or the `find`).
+
+### 7. Build the report
+
+Write `W/findings.json` (every field is shown in `$S/report_example.json`), then:
+
+`python "$S/build_report.py" W/findings.json --out "<project folder>"`
+
+It writes one self-contained, clickable HTML file (screenshots embedded) named `<Funnel Name> - Funnel Audit.html`,
+checks every jump link, and saves desktop and phone preview images. **Look at both previews**; fix and rebuild if
+anything looks wrong. Add `--pdf` only if the user asks for a PDF.
+
+Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
+
+1. **Verdict** — ready for ads or not, the blocking issues, and what works.
+2. **Funnel map** — each page, what every CTA/link does, where each path ends (✓ / ✗).
+3. **Fix list** — ranked Critical (before ads) → High → Medium. Each fix: page, device, exactly where, a screenshot,
+   "Now" (exact current text/state) → "Change to" (exact replacement).
+4. **Copy fixes** — small wording fixes as Now → Change to rows.
+5. **Copy & conversion review** — one card per point: what we see (quoted), recommendation (with example wording),
+   priority.
+6. **Tracking** — events per step, duplicates, missing value/currency.
+7. **Page speed** — table with report links + real-visitor result.
+8. **Re-check of the previous fix list** (if one exists).
+9. **Test purchase SOP and clean-up** — exact steps that worked, payment IDs, every test record created (CRM
+   contacts, checkout orders, pixel events) for the team to remove.
+10. **Not tested and why**, if anything couldn't be tested.
+
+Write for the person running the audit: plain language, short sentences, no developer jargon, exact text to paste.
+
+### 8. Final message
+
+A short summary: the verdict in one line, the top 3–5 fixes, the report's file link, test records to clean up,
+and anything that needs the user (e.g. a decision). Don't repeat the whole report.
+
+## Manual fallback (only when a script can't do it)
+
+Some funnels use checkouts or forms the scripts don't support (GHL order forms, Stripe Checkout pages,
+ClickFunnels, multi-step forms). `whop_checkout.py` / `optin_test.py` say so. Then use the Playwright MCP browser
+tools (ToolSearch `select:mcp__playwright__browser_navigate,mcp__playwright__browser_run_code_unsafe,...`) with the
+same rules: block pixels except for the one real test, code first, confirm $0.00, Stripe test card, record redirect
+URL, payment ID and pixel events. If the Playwright MCP isn't installed, the user can add it once with
+`claude mcp add playwright --scope user -- npx @playwright/mcp@latest` and restart Claude Code.
+
+## Good to know (lessons from real audits)
+
+- Pixels ignore "HeadlessChrome"; the scripts use a normal Chrome user agent so pixel behaviour is real.
+- GoHighLevel keeps separate desktop-only and mobile-only copies of blocks; they drift apart (different wording,
+  missing lines). Always compare.
+- GHL forms re-render once after load and can wipe typed values; `optin_test.py` re-checks and retypes.
+- Whop's phone country list is virtualised (type "United States" to find it); Whop requires a phone number;
+  Whop sends its own Purchase (with value and event ID), so a URL-based Purchase rule on the thank-you page is a
+  duplicate. URL-based Lead rules often match several pages (e.g. upsell and downsell).
+- Things that only show in raw HTML (curl) but not in the browser are hidden elements — confirm in the browser
+  before reporting them as visible problems.
 
 ## Stop and ask
 
 - No test code was given (needed before any test purchase).
 - The promo code is rejected or doesn't bring the total to $0.00.
-- The marketing sheet and the page disagree on which session is live and you can't tell which is right — report both.
+- The marketing sheet and the pages disagree on which session is live and you can't tell which is right — report both.

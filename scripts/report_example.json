@@ -1,0 +1,78 @@
+{
+  "_help": "Example input for build_report.py. Every field is shown once. Text accepts simple HTML. Bare https:// links and funnel paths from funnel_map (e.g. /optin) become links automatically. Screenshot paths are relative to this file. Severity: critical | high | medium | polish. Status: ok | warn | fail. verdict.status: not_ready | ready_with_fixes | ready.",
+  "funnel_name": "Example Webinar funnel",
+  "report_title": "Example Webinar Funnel Audit",
+  "file_name": "Example Webinar - Funnel Audit",
+  "tested_on": "1 Jan 2027, 10:00–11:30 AM ET",
+  "start_url": "https://example.com/optin",
+  "base_url": "https://example.com",
+  "devices": "Desktop 1440 px + iPhone 390 px",
+  "test_code": "TEST100",
+  "sheet_url": "https://docs.google.com/spreadsheets/d/EXAMPLE",
+
+  "verdict": {
+    "status": "not_ready",
+    "headline": "Not ready for heavy ad spend yet.",
+    "intro": "The flow works. These need fixing before the budget goes up:",
+    "blockers": ["The thank-you page shows last week’s date.", "No privacy policy link."],
+    "working": ["All CTAs scroll to the form.", "Real $0 test purchase completed on the upsell."]
+  },
+
+  "funnel_map": [
+    {"title": "1 · Opt-in", "url": "/optin", "items": ["3 CTA buttons → form ✓", "Form → /upsell ✓"]},
+    {"title": "2 · Upsell, $27", "url": "/upsell", "meta": "Whop plan_xxx", "items": ["“No thanks” → /thank-you ✓"]}
+  ],
+
+  "fixes": [
+    {"id": "C1", "severity": "critical", "title": "Thank-you page shows last week’s date",
+     "where": "/thank-you · desktop + mobile",
+     "body": "Optional paragraph.",
+     "bullets": ["Optional bullet list."],
+     "screenshots": [{"file": "shots/c1-date.png", "caption": "/thank-you, Step 1", "mobile": false}],
+     "now": "Tuesday, Dec 24 at 7 PM ET",
+     "change_label": "Change to (confirm the date first)",
+     "change_to": "Tuesday, Jan 7 at 7 PM ET",
+     "note": "Optional grey note under the box."},
+    {"id": "H1", "severity": "high", "chip": "High · decide", "title": "Example with a custom chip label", "body": "…"}
+  ],
+
+  "copy_fixes": [
+    {"where": "<b>/optin</b> · hero", "device": "mobile", "now": "Teh", "to": "The"}
+  ],
+  "copy_screenshots": [{"file": "shots/p-typo.png", "caption": "/optin hero"}],
+
+  "copy_audit": {
+    "summary": "One paragraph: what works in the copy and where conversion is being lost.",
+    "items": [
+      {"area": "No social proof on the opt-in", "priority": "critical", "page": "/optin",
+       "observation": "What the page says or lacks today, quoted.",
+       "recommendation": "What to change, with example wording."}
+    ]
+  },
+
+  "tracking": {
+    "intro": "Pixels found and how the test was run.",
+    "rows": [{"step": "/optin load", "events": "PageView", "status": "ok", "status_text": "OK"}]
+  },
+
+  "speed": {
+    "intro": "Google PageSpeed Insights lab scores.",
+    "rows": [{"page": "/optin", "mobile": 62, "desktop": 91, "lcp": "4.1 s", "tbt": "120 ms", "cls": "0.05 / 0.02",
+              "report_mobile": "https://pagespeed.web.dev/analysis/...?form_factor=mobile",
+              "report_desktop": "https://pagespeed.web.dev/analysis/...?form_factor=desktop"},
+             {"page": "/thank-you", "mark": "*", "mobile": 95, "desktop": 99, "lcp": "1.5 s", "tbt": "20 ms", "cls": "0 / 0", "source": "Lighthouse (local)"}],
+    "field": "Real-visitor Core Web Vitals summary.",
+    "notes": "*Thank-you pages are tested with local Lighthouse with pixels blocked."
+  },
+
+  "recheck": {"title": "Re-check of the previous fix list", "rows": [{"item": "1 · Hero typo", "status": "pass", "text": "Done"}]},
+
+  "sop": {
+    "steps": ["Apply the code TEST100 until the total reads $0.00.", "Card 4242 4242 4242 4242, 12/34, 123.", "Click the pay button."],
+    "note": "The code is required; a live checkout declines the test card otherwise.",
+    "cleanup": ["Whop: $0 order pay_xxx.", "CRM: test contact “Funnel AuditTest”."]
+  },
+
+  "not_tested": ["Anything that couldn’t be tested, and why."],
+  "footer": "How the audit was run."
+}
