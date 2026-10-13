@@ -79,7 +79,7 @@ not the funnel pages. Don't check inboxes or report on it.
   `context.route(...)` and *log* what would have fired:
   `facebook\.com/tr|google\.com/(rmkt|ccm|pagead)|googleadservices|analytics\.tiktok|t\.whop\.tw/conversions|google-analytics\.com/g/collect`
   (add `backend\.leadconnectorhq\.com/forms/submit` when re-testing a form you don't want to submit).
-- Do not change anything in the funnel builder, Whop, Meta or the sheet. Findings go in the report.
+- Do not change anything in the page builder (GoHighLevel etc.), Whop, Meta or the sheet. Findings go in the report.
 
 ## Setup
 
