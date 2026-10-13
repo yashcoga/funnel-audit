@@ -1,6 +1,6 @@
 # Funnel Audit — Claude Code skill
 
-Give Claude the first page of a funnel and get back a full pre-launch audit, ready to hand to the funnel designer.
+Give Claude the first page of a funnel and get back a full pre-launch audit: everything to fix before ads go live, with screenshots showing exactly where.
 
 Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 
@@ -91,4 +91,4 @@ A full audit takes about 30–60 minutes. Claude posts short progress updates as
   created is listed in the report so you can delete it.
 - **Nothing is changed** in your page builder, checkout, ad accounts or sheet. Findings go in the report only.
 - When Claude revisits thank-you pages or runs speed tests, it blocks the ad pixels so no fake purchases are counted.
-- Best times to run it: once the pages are final but before ads start, and again after the designer's fixes.
+- Best times to run it: once the pages are final but before ads start, and again after your fixes.

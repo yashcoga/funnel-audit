@@ -9,7 +9,7 @@ The user gives a **starting page** (usually the opt-in). Everything else is disc
 Optional inputs: a **test/promo code** for the checkout, a **marketing sheet** (Google Sheet with event dates,
 funnel links, Zoom links), and any earlier **fix list** in the project folder.
 
-The user wants short, plain progress messages and a finished report they can hand to the funnel builder.
+The user wants short, plain progress messages and a finished report they can work from and share with their team.
 Ask only when blocked (see "Stop and ask").
 
 ## Step 0: check the setup (every run, before anything else)
@@ -61,7 +61,7 @@ In scope: page flow, every CTA/link, forms and validation, checkout, redirects, 
 mobile layout, page speed, compliance basics (privacy policy, SMS consent, refund text).
 
 **Out of scope:** whether emails/SMS arrive and whether CRM automations fire. That belongs to the automation team,
-not the funnel build. Don't check inboxes or report on it.
+not the funnel pages. Don't check inboxes or report on it.
 
 ## Safety rules (always)
 
@@ -176,7 +176,7 @@ titles copied from another page, image text typos, leftover "VIP"/old-offer word
 
 ## Annotated screenshots (required, every audit)
 
-Every fix the designer has to *find* on a page gets a cropped screenshot with the exact spot marked, so anyone can
+Every fix that has to be *found* on a page gets a cropped screenshot with the exact spot marked, so anyone can
 see what to change without hunting. Skip screenshots only for things that aren't visible (pixel events, meta tags,
 speed numbers).
 
@@ -200,7 +200,7 @@ speed numbers).
 
 ## Report
 
-One report per funnel, written for the funnel builder / team:
+One report per funnel, written for the person running the audit, who makes the fixes and may share it with their team:
 
 1. **Verdict** — ready for ads or not, in one line, with the blocking issues.
 2. **Funnel map** — each page URL, what each CTA/link does, where each path ends (tested ✓ / ✗).
