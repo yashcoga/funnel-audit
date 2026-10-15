@@ -165,6 +165,9 @@ class TrackingLog:
 # ---------------------------------------------------------------- browser helpers
 
 def launch(p, headless=True):
+    # FUNNEL_AUDIT_HEADED=1 opens a visible window for every script, so the user can watch the checks live.
+    if os.environ.get("FUNNEL_AUDIT_HEADED") == "1":
+        headless = False
     return p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
 
 
@@ -190,7 +193,25 @@ def prepare(page, url, wait_ms=2000, scroll=True, timeout=60000):
             height = page.evaluate("document.body.scrollHeight")
         page.evaluate("window.scrollTo(0, 0)")
         page.wait_for_timeout(900)
+    unfix_backgrounds(page)
     return {"status": resp.status if resp else None, "final_url": page.url, "open_ms": int((time.time() - t0) * 1000)}
+
+
+# Full-page screenshots can't paint `background-attachment: fixed` (parallax) backgrounds: those sections come out as
+# their plain base colour (e.g. black), which looks like "black text on black". GoHighLevel uses fixed backgrounds a lot
+# and marks them !important, so a stylesheet override loses; set it inline on each layer instead.
+UNFIX_BG_JS = r"""
+() => { let n = 0; for (const e of document.querySelectorAll('*')) { const s = getComputedStyle(e);
+  if (s.backgroundAttachment.includes('fixed') && s.backgroundImage !== 'none') {
+    e.style.setProperty('background-attachment', 'scroll', 'important'); n++; } } return n; }
+"""
+
+
+def unfix_backgrounds(page):
+    try:
+        return page.evaluate(UNFIX_BG_JS)
+    except Exception:
+        return 0
 
 
 def fetch_size(url, timeout=20):

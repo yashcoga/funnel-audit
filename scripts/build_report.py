@@ -29,6 +29,8 @@ SEV = {"critical": ("crit", "c-crit", "Critical"), "high": ("high", "c-high", "H
        "medium": ("med", "c-med", "Medium"), "polish": ("", "c-pol", "Polish")}
 STATUS = {"ok": "pass", "pass": "pass", "warn": "warn", "fail": "fail"}
 EXTRA_CSS = """
+.legal-pg{font-size:13px;color:var(--muted)}
+#legal ~ .tbl td ul,section td ul{margin:0;padding-left:18px}
 .verdict.ready{background:var(--accent-soft);border-color:var(--accent)}
 .verdict.ready strong.v{color:var(--accent)}
 .verdict.mostly{background:var(--high-soft);border-color:var(--high)}
@@ -111,16 +113,26 @@ def build_html(d, base_dir):
         paths.add(urllib.parse.urlparse(u).path if "://" in u else u)
     for r in d.get("speed", {}).get("rows", []):
         paths.add(r.get("page"))
+    for r in (d.get("legal_pages") or {}).get("rows", []):
+        paths.add(r.get("page"))
     L = Linker(d.get("base_url"), paths)
     fixes = d.get("fixes", [])
     copy = d.get("copy_fixes", [])
     cc = d.get("copy_audit", {})
-    nav = [("verdict", "Verdict"), ("index", "All fixes"), ("map", "Funnel map"), ("fixes", "Fix details")]
+    nav = [("verdict", "Verdict")]
+    if d.get("switch_over"):
+        nav.append(("switch", "Switch-over"))
+    nav += [("index", "All fixes"), ("map", "Funnel map"), ("fixes", "Fix details")]
     if copy:
         nav.append(("copy", "Copy fixes"))
     if cc.get("items"):
         nav.append(("conversion", "Copy &amp; conversion"))
-    nav += [("tracking", "Tracking"), ("speed", "Speed")]
+    nav.append(("tracking", "Tracking"))
+    if d.get("dynamic_dates"):
+        nav.append(("dates", "Dates"))
+    if d.get("legal_pages"):
+        nav.append(("legal", "Legal pages"))
+    nav.append(("speed", "Speed"))
     if d.get("recheck"):
         nav.append(("recheck", "Re-check"))
     if d.get("sop"):
@@ -151,7 +163,7 @@ def build_html(d, base_dir):
         A(f'<span>Start page: <a class="mono" href="{esc(d["start_url"])}">{esc(d["start_url"].split("://")[-1])}</a></span>')
     A(f'<span>{esc(d.get("devices", "Desktop 1440 px + iPhone 390 px"))}</span>')
     if d.get("test_code"):
-        A(f'<span>Test code: <span class="mono">{esc(d["test_code"])}</span></span>')
+        A(f'<span>Coupon code: <span class="mono">{esc(d["test_code"])}</span></span>')
     if d.get("sheet_url"):
         A(f'<span><a href="{esc(d["sheet_url"])}">Marketing sheet</a></span>')
     A("</div>\n<nav class=\"toc\">" + "".join(f'<a href="#{i}">{t}</a>' for i, t in nav) + "</nav>\n</header>")
@@ -168,6 +180,24 @@ def build_html(d, base_dir):
     if v.get("working"):
         A('<div class="good"><h3>Working correctly</h3><ul>' + "".join(f"<li>{L(x)}</li>" for x in v["working"]) + "</ul></div>")
     A("</section>")
+
+    # switch-over from the live funnel (ads + automations run on the old opt-in)
+    so = d.get("switch_over")
+    if so:
+        A('<section aria-labelledby="switch"><h2 id="switch">Switch-over from the live funnel</h2>')
+        if so.get("intro"):
+            A(f"<p>{L(so['intro'])}</p>")
+        if so.get("verdict"):
+            A(f'<div class="verdict"><strong class="v">{L(so["verdict"])}</strong></div>')
+        A('<div class="tbl"><table><thead><tr><th>Check</th><th>Old (live now)</th><th>New</th><th>Result</th><th>What to do</th></tr></thead><tbody>')
+        for r in so.get("rows", []):
+            A(f'<tr><td>{L(r["check"])}</td><td class="mono">{L(r["old"])}</td><td class="mono">{L(r["new"])}</td>'
+              f'<td class="{STATUS.get(r.get("status"), "")}" style="white-space:nowrap">{L(r.get("status_text", ""))}</td><td>{L(r.get("action", ""))}</td></tr>')
+        A("</tbody></table></div>")
+        if so.get("checklist"):
+            A('<h3>Check in GHL before switching (can\'t be seen from outside)</h3><ol>'
+              + "".join(f"<li>{L(x)}</li>" for x in so["checklist"]) + "</ol>")
+        A("</section>")
 
     # index
     rows = "".join(
@@ -247,6 +277,45 @@ def build_html(d, base_dir):
     for r in t.get("rows", []):
         A(f'<tr><td>{L(r["step"])}</td><td>{L(r["events"])}</td><td class="{STATUS.get(r.get("status"), "")}">{L(r.get("status_text", ""))}</td></tr>')
     A("</tbody></table></div></section>")
+
+    dd = d.get("dynamic_dates")
+    if dd:
+        A('<section aria-labelledby="dates"><h2 id="dates">Dates from GHL custom values</h2>')
+        if dd.get("intro"):
+            A(f"<p>{L(dd['intro'])}</p>")
+        A('<div class="tbl"><table><thead><tr><th>Page</th><th>What it shows</th><th>Result</th><th>What to do</th></tr></thead><tbody>')
+        for r in dd.get("rows", []):
+            A(f'<tr><td>{L(r["page"])}</td><td>{L(r["text"])}</td><td class="{STATUS.get(r.get("status"), "")}">'
+              f'{L(r.get("status_text", ""))}</td><td>{L(r.get("action", ""))}</td></tr>')
+        A("</tbody></table></div>")
+        if dd.get("notes"):
+            A(f'<p class="note">{L(dd["notes"])}</p>')
+        A("</section>")
+
+    lg = d.get("legal_pages")
+    if lg:
+        A('<section aria-labelledby="legal"><h2 id="legal">Legal pages in the footer</h2>')
+        if lg.get("intro"):
+            A(f"<p>{L(lg['intro'])}</p>")
+        mx = lg.get("matrix") or {}
+        if mx:
+            kinds = sorted({k for v in mx.values() for k in v})
+            A('<div class="tbl"><table><thead><tr><th>Funnel page</th>' + "".join(f"<th>{esc(k.title())}</th>" for k in kinds)
+              + "</tr></thead><tbody>")
+            for pg, ks in mx.items():
+                A(f"<tr><td>{L(pg)}</td>" + "".join(f'<td class="{"pass" if k in ks else "fail"}">{"✓" if k in ks else "✗"}</td>'
+                                                   for k in kinds) + "</tr>")
+            A("</tbody></table></div>")
+        A('<div class="tbl"><table><thead><tr><th>Legal page</th><th>Result</th><th>What we found</th><th>What to do</th></tr></thead><tbody>')
+        for r in lg.get("rows", []):
+            found = "".join(f"<li>{L(x)}</li>" for x in r.get("findings", []))
+            A(f'<tr><td>{L(r["page"])}' + (f'<br><span class="legal-pg">{esc(r["name"])}</span>' if r.get("name") else "")
+              + f'</td><td class="{STATUS.get(r.get("status"), "")}">{L(r.get("status_text", ""))}</td>'
+              f'<td>{"<ul>" + found + "</ul>" if found else "No problems found"}</td><td>{L(r.get("action", ""))}</td></tr>')
+        A("</tbody></table></div>")
+        if lg.get("notes"):
+            A(f'<p class="note">{L(lg["notes"])}</p>')
+        A("</section>")
 
     sp = d.get("speed", {})
     A('<section aria-labelledby="speed"><h2 id="speed">Page speed</h2>')

@@ -87,6 +87,21 @@ def run(browser, url, device, code, do_submit, email, cta):
     prepare(page, url, scroll=False, wait_ms=2500)
     res = {"url": url, "device": device, "code": code, "submitted": False}
     if not page.locator(IFRAME).count():
+        # pop-up checkouts only load the Whop iframe after the "Yes" click: click the CTA (or a common one) first
+        for sel in (cta, 'a[href="#checkout"], a[href*="#checkout"], a[href*="#order"], a[href*="#buy"]'):
+            try:
+                btn = page.locator(sel).first
+                if not btn.count():
+                    continue
+                btn.scroll_into_view_if_needed()
+                (btn.tap if device == "mobile" else btn.click)()
+                page.locator(IFRAME).first.wait_for(state="attached", timeout=8000)
+                res["checkout_in_popup"] = True
+                cta = sel
+                break
+            except Exception:
+                continue
+    if not page.locator(IFRAME).count():
         res["error"] = ("No Whop embedded checkout on this page. Test this checkout manually with the Playwright "
                         "browser tools (same rules: code first, $0 total, Stripe test card).")
         ctx.close()
@@ -97,10 +112,13 @@ def run(browser, url, device, code, do_submit, email, cta):
     res["payment_redirect_url"] = (q.get("payment_redirect_url") or [None])[0]
     # click the main CTA like a visitor, then see if the checkout is on screen
     try:
-        btn = page.locator(cta).first
-        btn.scroll_into_view_if_needed()
-        (btn.tap if device == "mobile" else btn.click)()
-        page.wait_for_timeout(2500)
+        if res.get("checkout_in_popup"):
+            page.wait_for_timeout(2500)   # already opened by the click above
+        else:
+            btn = page.locator(cta).first
+            btn.scroll_into_view_if_needed()
+            (btn.tap if device == "mobile" else btn.click)()
+            page.wait_for_timeout(2500)
         top = page.locator(IFRAME).first.evaluate("e => Math.round(e.getBoundingClientRect().top)")
         res["checkout_top_after_cta"] = top
         res["checkout_on_screen_after_cta"] = top < page.viewport_size["height"] - 150
@@ -112,9 +130,18 @@ def run(browser, url, device, code, do_submit, email, cta):
     f.locator("input[name=email]").wait_for(timeout=45000)
     page.wait_for_timeout(1500)
     res["total_before_code"] = total_of(text(f))
-    res["pay_button_text"] = (f.locator("button[type=submit]").last.inner_text() or "").strip()
+    # Whop's own pay button can be hidden (hide-submit-button) with a button on the page paying instead
+    pay = f.locator("button[type=submit]")
+    if not pay.count():
+        pay = page.locator("#co-pay, button[data-pay], .co__pay, [class*=checkout] button[type=submit]")
+        res["pay_button_on_page"] = True
+    res["pay_button_text"] = (pay.last.inner_text(timeout=5000) or "").strip() if pay.count() else None
+    if code and not f.get_by_text(re.compile(r"(add|have a) (promo|discount|coupon) code", re.I)).count():
+        res["promo_error"] = ("No promo-code box in the checkout. Whop shows it only when the plan has an active "
+                              "promo code; check the code exists for this plan in Whop.")
+        code = None
     if code:
-        f.get_by_text("Add promo code").click()
+        f.get_by_text(re.compile(r"(add|have a) (promo|discount|coupon) code", re.I)).first.click()
         f.locator("input[name=code]").fill(code)
         f.get_by_role("button", name="Apply").click()
         t = ""
@@ -167,7 +194,11 @@ def run(browser, url, device, code, do_submit, email, cta):
         return res
     before = page.url
     t0 = time.time()
-    f.locator("button[type=submit]").last.click()
+    if not pay.count():
+        res["error"] = "No pay button found (neither inside the Whop checkout nor on the page)."
+        ctx.close()
+        return res
+    pay.last.click()
     res["submitted"] = True
     t = ""
     for _ in range(40):
@@ -208,7 +239,7 @@ def main():
         res = run(browser, a.url, a.device, a.code, a.submit, a.email, a.cta)
         browser.close()
     path = write_json(os.path.join(a.out, f"checkout-{slug(a.url)}-{a.device}.json"), res)
-    for k in ("plan", "payment_redirect_url", "checkout_top_after_cta", "checkout_on_screen_after_cta", "pay_button_text",
+    for k in ("plan", "checkout_in_popup", "pay_button_on_page", "payment_redirect_url", "checkout_top_after_cta", "checkout_on_screen_after_cta", "pay_button_text",
               "total_before_code", "promo_line", "total_after_code", "promo_error", "phone_country_set", "total_ready",
               "note", "error", "result"):
         if res.get(k) is not None:

@@ -51,8 +51,19 @@ COLLECT_JS = r"""
   // --- invisible / low-contrast text: text colour vs the first opaque background behind it
   const parse = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map(Number); return {r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1}; };
   const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+  // A background layer = a positioned child that paints an image over its parent's base colour (GoHighLevel puts every
+  // section background in its own `div.bg.bgCover`, so the section itself reports e.g. black with no image).
+  const covers = (a, b) => { const r = a.getBoundingClientRect(), t = b.getBoundingClientRect();
+    return r.left <= t.left + 2 && r.right >= t.right - 2 && r.top <= t.top + 2 && r.bottom >= t.bottom - 2; };
+  const layerBehind = (anc, el) => [...anc.children].some(c => { if (c.contains(el)) return false;
+    const cs = getComputedStyle(c); if (!['absolute', 'fixed'].includes(cs.position)) return false;
+    const paints = (cs.backgroundImage && cs.backgroundImage !== 'none') || ['IMG', 'VIDEO', 'PICTURE', 'CANVAS', 'IFRAME'].includes(c.tagName);
+    return paints && covers(c, el); });
   const bgOf = el => { for (let e = el; e; e = e.parentElement) { const s = getComputedStyle(e);
       if (s.backgroundImage && s.backgroundImage !== 'none') return null;  // image/gradient behind: can't judge
+      if (layerBehind(e, el)) return null;                                 // image layer behind: can't judge
+      for (const ps of ['::before', '::after']) { const p = getComputedStyle(e, ps);
+        if (p.content !== 'none' && p.backgroundImage !== 'none') return null; }
       const c = parse(s.backgroundColor); if (c && c.a > 0.9) return c; } return {r: 255, g: 255, b: 255, a: 1}; };
   const lowContrast = [];
   for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,span,a,div,label')) {
@@ -108,7 +119,7 @@ COLLECT_JS = r"""
 """
 
 MONTHS = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
-DATE_RE = re.compile(rf"(?:(?:Mon|Tues?|Wed(?:nes)?|Thu(?:rs)?|Fri|Sat(?:ur)?|Sun)(?:day)?,?\s+)?{MONTHS}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?(?:[^\n]{{0,30}}?\d{{1,2}}(?::\d\d)?\s*(?:am|pm|AM|PM)\s*(?:[ECMP][SD]?T)?)?", re.I)
+DATE_RE = re.compile(rf"(?:(?:Mon|Tues?|Wed(?:nes)?|Thu(?:rs)?|Fri|Sat(?:ur)?|Sun)(?:day)?,?\s+)?{MONTHS}\.?\s+\d{{1,2}}(?!\d)(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?(?:[^\n]{{0,30}}?\d{{1,2}}(?::\d\d)?\s*(?:am|pm|AM|PM)\s*(?:[ECMP][SD]?T)?)?", re.I)
 TZ_RE = re.compile(r"\b\d{1,2}(?::\d\d)?\s*(?:am|pm)\s*([ECMP][SD]T|ET|CT|MT|PT)\b", re.I)
 
 

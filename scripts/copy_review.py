@@ -27,7 +27,7 @@ from common import read_json, write_json  # noqa: E402
 PRICE_RE = re.compile(r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d\d)?(?!\d)")
 PCT_RE = re.compile(r"\b\d{1,3}\s?%")
 TIME_RE = re.compile(r"\b\d{1,2}(?::\d\d)?\s?(?:am|pm)\s?(?:[ECMP][SD]?T)?\b", re.I)
-MONTH_RE = re.compile(r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?", re.I)
+MONTH_RE = re.compile(r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\.?\s+\d{1,2}(?!\d)(?:st|nd|rd|th)?(?:,?\s+\d{4})?", re.I)
 SIGNALS = {
     "claims (check they're backed up / compliant)": r"\b(guarantee[ds]?|proven|results?|income|revenue|make \$|earn|six[- ]figure|7[- ]figure|daily (?:leads|sales)|overnight|instant(?:ly)?|best|#1|number one)\b",
     "urgency & scarcity (must be true)": r"\b(limited|only \d+|seats? (?:are )?limited|last chance|hurry|ends? (?:soon|tonight|today)|disappears|expires?|one[- ]time|today only|before it'?s gone|countdown|don'?t miss)\b",
