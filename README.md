@@ -25,6 +25,11 @@ Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 - **Switch-over from a live funnel:** if ads and automations already run on an old funnel, Claude compares the old
   and new opt-in (address, GHL funnel/step, form, form redirect, fields, Meta/Google/TikTok pixels) and says
   whether switching would break them, with the safe way to switch and a checklist for GHL workflows.
+- **Right pages, right tags:** every link is followed to the page it opens and checked against the funnel's own step list
+  (catches "No thanks" links that go to an old page), and every page's SEO title, description, share image and
+  noindex are checked.
+- **Custom values:** dates, weekday, time and the "Add to My Calendar" link must come from `masterclass_date`,
+  `masterclass_day`, `masterclass_time` and `masterclass_addevent`, checked on the live pages and in the GHL paste files.
 - **Watch it live:** every check runs in a visible Chrome window, so you can see what Claude is clicking.
 
 **What you get:** one clickable **HTML report** saved in your folder (screenshots included, works offline, easy to
@@ -110,6 +115,7 @@ A full audit usually takes 30–60 minutes. Claude posts a short update as each 
 | `scripts/scan_page.py` | Scans a page on desktop + mobile: links, buttons, images, text, dates, invisible text, duplicates, sideways scroll, heavy images, pixels, screenshots |
 | `scripts/test_ctas.py` | Clicks every button and link and records where it lands (incl. "is the checkout on screen?") |
 | `scripts/check_links.py` | Checks every link, calendar invites (date, Zoom link) and whether privacy/terms pages exist |
+| `scripts/check_funnel_steps.py` | Reads the funnel's step list from GHL: every page, links that land outside the funnel (old pages), and SEO / share meta tags per page |
 | `scripts/compare_live_funnel.py` | Switch-over check: compares the live (old) opt-in with the new one so ads and automations keep working |
 | `scripts/check_dynamic_dates.py` | Checks that every date, time and calendar link comes from GHL custom values (swap test + match test) |
 | `scripts/optin_test.py` | Tests the opt-in form (validation, required SMS box) and submits the test lead |

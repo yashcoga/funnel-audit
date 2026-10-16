@@ -149,6 +149,23 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
   still published, and do they still match the live offer? Ads and shared links often point at them.
 - Other checkout types: see "Manual fallback".
 
+### 2a. Funnel steps, wrong-page links and SEO meta tags (always, after test_ctas.py has run on every page)
+
+`python "$S/check_funnel_steps.py" <start URL> --out W` (reads `W/ctas`)
+
+- **Steps:** the funnel's own step list from GHL. Scan every published step, including ones nothing links to
+  (a second opt-in, test pages). An unpublished step goes back to the first step.
+- **Wrong-page links:** a link that "navigates" is NOT automatically right. Every link/button on a funnel page that
+  lands on the same domain but outside this funnel's steps (typically an old upsell or thank-you page from the
+  previous funnel, with the old design) is a fix: **Critical** if it's a "No thanks"/"Yes" link or the form
+  redirect, High otherwise. Also look at the screenshot of every destination: same design and same offer as the
+  rest of the funnel? Never report a link as fixed until you've opened the page it lands on.
+- **SEO / share meta tags:** per step — title, meta description, og:title / og:description / og:image, canonical,
+  favicon, noindex. Copied titles/descriptions (e.g. the opt-in's title on the upsell), no share image,
+  auto-generated slugs (`/optin-page-1109`) and indexable offer/thank-you pages go in the fix list (High for the
+  opt-in's own tags and for copied titles; Medium for the rest), with exact replacement text for every title and
+  description. Report the table in the `funnel_steps` section.
+
 ### 2b. Switch-over from the live funnel (whenever ads or automations run on an old funnel)
 
 Ads point at the old opt-in URL and optimise on its pixel; GHL workflows (tags, emails, SMS, Zoom/calendar
@@ -209,21 +226,39 @@ block automated checks; the script says so — don't report those as broken.
 
 ### 3b. Dates and times come from GHL custom values (always)
 
-Every date, time and per-class link must come from GoHighLevel custom values (e.g. `{{ custom_values.masterclass_date }}`),
-never typed into the page, so the next class only needs the custom values changed.
+Every date, day, time and per-class link must come from GoHighLevel custom values, never typed into the page, so
+the next class only needs the custom values changed. The team's **four standard custom values** (the tags never
+change; check them on every page that shows any of them):
 
-`python "$S/check_dynamic_dates.py" <every page URL> --out W` (add `--value "<current date value>" --value "<time value>"`
-when the pages don't expose them; some page templates expose them as RAW_DATE / RAW_TIME and the script reads them).
+| Tag | Used for |
+|---|---|
+| `{{custom_values.masterclass_date}}` | the date (opt-in, confirmation pages, countdowns) |
+| `{{custom_values.masterclass_day}}` | the weekday shown ("Monday") |
+| `{{custom_values.masterclass_time}}` | the time (and the CT/PT conversions) |
+| `{{custom_values.masterclass_addevent}}` | every "Add to My Calendar" button / link |
 
-- **Swap test** (pages with a date script, `window.MC_EVENT`): reloads with `?masterclass_date=…&masterclass_time=…`;
-  anything that doesn't change is hard-coded → fix (High; Critical if it's the main date on the opt-in).
+`python "$S/check_dynamic_dates.py" <every page URL> --source <folder with the GHL paste files> --out W`
+
+- **Source check** (`--source`): for every GHL paste file (.html) in the project, which of the four tags it uses,
+  which it should use but doesn't (date/day/time on any page with dates; addevent on any page with a calendar
+  button), typed calendar links (`addevent.com/event/…`) and typed dates in the page text. This is the only way to
+  prove which tag each page uses — the live page only shows the filled-in values. When a file is missing a tag, the
+  fix is a code change in that file: the date script reads `RAW_DATE`, `RAW_TIME`, `RAW_DAY`, `RAW_ADDEVENT` from the
+  tags in its small merge-tag script, and the calendar button reads `MC_EVENT.calendarUrl`. If the user asks you to
+  update the code, make the change, keep a backup, and test the file locally with `?masterclass_date=…&masterclass_day=…`
+  `&masterclass_addevent=…` (no errors, day and link follow the values) before handing it over.
+- **Swap test** (live pages with a date script, `window.MC_EVENT`): reloads with test values for all four
+  (`?masterclass_date=…&masterclass_time=…&masterclass_day=Monday&masterclass_addevent=<test link>`); anything that
+  doesn't change is hard-coded → fix (High; Critical if it's the main date on the opt-in). It also reports whether
+  the weekday comes from `masterclass_day` (or is worked out from the date) and whether the calendar button follows
+  `masterclass_addevent`. A `masterclass_day` that doesn't match the date's real weekday is a Critical copy error.
 - **Match test** (all other pages, e.g. native GHL thank-you pages): `OK?` = the text equals the custom value,
   `FIX?` = extra typed words (a weekday the value doesn't have) or no match. GHL fills tags in on its server, so
   these can't be proven from outside: list them as "confirm in the GHL editor that this text is the
   `{{ custom_values.… }}` tag".
 - A visible `{{ custom_values.x }}` on the page = the tag isn't being filled (wrong name / empty value) → Critical.
 - `FIXED LINK` = calendar invite or Zoom link stored in the page (href or page code). It won't follow a date change:
-  recommend a custom value for it (e.g. `masterclass_calendar_link`) or add it to the per-class update checklist.
+  it must use `{{custom_values.masterclass_addevent}}`.
 - The custom value text itself must be right: "7:00 PM EST" between March and November should be "7:00 PM ET".
 
 Report it as its own section in the report ("Dates from custom values": one row per page with OK / Fix, the exact
@@ -315,6 +350,8 @@ anything looks wrong. Add `--pdf` only if the user asks for a PDF.
 Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
 
 1. **Verdict** — ready for ads or not, the blocking issues, and what works.
+1a. **Funnel steps & SEO** — every step with its title/description/share-image issues and every link that lands
+   outside the funnel (build_report.py: the `funnel_steps` section, straight from `funnel-steps.json`).
 1b. **Switch-over from the live funnel** (when one exists) — old vs new table and the GHL checklist
    (build_report.py: the `switch_over` section, straight from `switch-over.json`).
 2. **Funnel map** — each page, what every CTA/link does, where each path ends (✓ / ✗).
@@ -396,6 +433,14 @@ URL, payment ID and pixel events. If the Playwright MCP isn't installed, the use
   built as a new funnel with a new form (e.g. `Masterclass October 2026`) and no Meta pixel, while ads,
   two pixels and every workflow ran on the old funnel's form (e.g. `Masterclass 8-2024`). Nothing errors:
   sign-ups simply stop getting tags, emails and SMS. `compare_live_funnel.py` catches this; run it every time.
+- **"The link works" ≠ "the link is right".** In the Coach K re-audit the upsell's "No thanks" was set to a page
+  from the OLD funnel (old design), and it was first reported as fixed because it navigated somewhere. Always open
+  the destination and compare it with the funnel (check_funnel_steps.py flags pages outside the step list).
+- **GHL form element "On submit: none"** (shows the form's own thank-you message) leaves sign-ups on the opt-in.
+  When a form is shared with another funnel, fix it on the page element (Action on submit → Go to next step), not
+  in the form itself. compare_live_funnel.py flags it; confirm with the real test sign-up.
+- **Old switch-over snapshot:** once the old opt-in is replaced, compare with the snapshot from before the switch:
+  `compare_live_funnel.py --old-json <earlier switch-over.json> --new <url>`. Save that file before the switch.
 - **Custom-code pop-ups grab the GHL form by its element ID** (e.g. `var GHL_FORM_ID = 'form-7A_EwDg6Cc';` in pages
   made with html-to-ghl). When the design moves into the old funnel's step, that ID must change to the old step's
   form element (e.g. `form-OILX7myDoz`), or the pop-up shows "Registration form not found". Say so in the fix.

@@ -31,7 +31,11 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import launch, new_context, prepare, slug, write_json  # noqa: E402
 
-DEFAULT_TEST = "masterclass_date=November 2, 2026&masterclass_time=8:00 PM ET"
+# the four standard GHL custom values; their tags never change
+STANDARD_TAGS = ["masterclass_date", "masterclass_day", "masterclass_time", "masterclass_addevent"]
+TEST_ADDEVENT = "https://www.addevent.com/event/AUDITTEST"
+DEFAULT_TEST = ("masterclass_date=November 2, 2026&masterclass_time=8:00 PM ET&masterclass_day=Monday"
+                f"&masterclass_addevent={TEST_ADDEVENT}")
 
 COLLECT_JS = r"""
 () => {
@@ -62,7 +66,8 @@ COLLECT_JS = r"""
   const fixed = [...document.querySelectorAll('a[href], [data-href]')].map(a => a.getAttribute('href') || a.dataset.href)
     .filter(h => h && /addevent\.com|evt\.to|calendar\.google|outlook\.(live|office)|\.ics(\?|$)|zoom\.us\/(j|w|meeting)|us\d+web\.zoom/i.test(h));
   const ev = window.MC_EVENT ? {state: window.MC_EVENT.state, source: window.MC_EVENT.source,
-    rawDate: window.MC_EVENT.rawDate, rawTime: window.MC_EVENT.rawTime} : null;
+    rawDate: window.MC_EVENT.rawDate, rawTime: window.MC_EVENT.rawTime, rawDay: window.MC_EVENT.rawDay || null,
+    calendarUrl: window.MC_EVENT.calendarUrl || null} : null;
   // links kept in page code (e.g. CONFIG.calendarUrl used by a button), not in an href
   const CAL = /https?:(\/\/|\\u002F\\u002F)[^'"\s]*?(addevent\.com|evt\.to|calendar\.google|zoom\.us)[^'"\s]*/gi;
   for (const sc of document.scripts) for (const m of (sc.textContent.match(CAL) || []))
@@ -115,6 +120,42 @@ def classify(text, values):
     return "custom_value", "matches the custom value text"
 
 
+def source_report(folder):
+    """Which standard custom-value tags each GHL paste file uses, plus typed calendar links / dates."""
+    import glob
+    month = r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}"
+    print(f"Source files in {folder} (standard tags: {', '.join(STANDARD_TAGS)}):")
+    for f in sorted(glob.glob(os.path.join(folder, "*.html"))):
+        s = open(f, encoding="utf-8", errors="ignore").read()
+        if not s.strip():
+            print(f"  EMPTY {os.path.basename(f)}")
+            continue
+        used = sorted(set(re.findall(r"\{\{\s*custom_values\.([a-z0-9_]+)\s*\}\}", s)))
+        shows_date = bool(re.search(r"RAW_DATE|data-ev=|masterclass_date", s))
+        has_cal = bool(re.search(r"Add to (My )?Calendar|calendarUrl", s, re.I))
+        need = [t for t in STANDARD_TAGS if shows_date and (t != "masterclass_addevent" or has_cal)]
+        missing = [t for t in need if t not in used]
+        typed_cal = sorted(set(re.findall(r"https?://(?:www\.)?(?:addevent\.com/event|evt\.to)/[A-Za-z0-9]+", s)))
+        typed_cal = [l for l in typed_cal if not re.search(r"/(x+|example|test)$", l, re.I)]   # placeholders in notes
+        body = re.sub(r"<script.*?</script>|<!--.*?-->|<style.*?</style>", " ", s, flags=re.S)
+        typed_dates = []
+        for m in re.finditer(month, body):
+            tag_start = body.rfind("<", 0, m.start())
+            if body.rfind(">", 0, m.start()) < tag_start:
+                continue   # inside an attribute (e.g. aria-label): page code usually rewrites these
+            if "data-ev" not in body[tag_start:m.start()]:
+                typed_dates.append(m.group(0))
+        mark = "OK  " if not (missing or typed_cal or typed_dates) else "FIX "
+        print(f"  {mark} {os.path.basename(f):40} uses: {', '.join(used) or 'none'}")
+        if missing:
+            print(f"         - not using: {', '.join(missing)}")
+        for l in typed_cal:
+            print(f"         - typed calendar link {l}: use {{{{custom_values.masterclass_addevent}}}}")
+        if typed_dates:
+            print(f"         - typed dates in the page text: {', '.join(sorted(set(typed_dates)))}")
+    print()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("urls", nargs="+")
@@ -122,7 +163,10 @@ def main():
     ap.add_argument("--value", action="append", default=[], help="current text of a date/time custom value (repeat)")
     ap.add_argument("--test-params", default=DEFAULT_TEST, help="URL parameters for the swap test")
     ap.add_argument("--device", default="both", choices=["desktop", "mobile", "both"])
+    ap.add_argument("--source", help="folder with the GHL paste files (.html): lists which of the standard tags each file uses")
     a = ap.parse_args()
+    if a.source:
+        source_report(a.source)
     os.makedirs(a.out, exist_ok=True)
     devices = ["desktop", "mobile"] if a.device == "both" else [a.device]
     today = datetime.date.today()
@@ -141,6 +185,16 @@ def main():
                     sw = collect(browser, with_params(url, a.test_params), d)
                     res["swap_resolver"] = sw["ev"]
                     swapped_texts = {i["text"] for i in sw["items"]}
+                    se = sw["ev"] or {}
+                    if se.get("source") == "url":
+                        res["day_source"] = ("custom value masterclass_day" if (se.get("rawDay") or "").lower() == "monday"
+                                             else "worked out from the date (not from masterclass_day)")
+                        cal_links = [l for l in base["fixed"] if re.search(r"addevent|evt\.to|calendar", l, re.I)]
+                        if se.get("calendarUrl") == TEST_ADDEVENT:
+                            res["calendar_source"] = "custom value masterclass_addevent"
+                            res["fixed_links"] = [l for l in res["fixed_links"] if l not in cal_links]
+                        elif cal_links:
+                            res["calendar_source"] = "typed into the page (not masterclass_addevent)"
                 for it in base["items"]:
                     row = dict(it)
                     if swapped_texts is not None and (res.get("swap_resolver") or {}).get("source") == "url":
@@ -173,8 +227,12 @@ def main():
                     "partly_typed": "FIX?", "unknown": "??  "}[it["result"]]
             extra = f"  [{it['zone_issue']}]" if it.get("zone_issue") else ""
             print(f"   {mark} {it['text'][:90]!r}  -> {it['why']}{extra}")
+        if r.get("day_source"):
+            print(f"   {'OK  ' if r['day_source'].startswith('custom') else 'FIX '} weekday: {r['day_source']}")
+        if r.get("calendar_source"):
+            print(f"   {'OK  ' if r['calendar_source'].startswith('custom') else 'FIX '} Add to My Calendar link: {r['calendar_source']}")
         for l in r["fixed_links"]:
-            print(f"   FIXED LINK (update per class or make it a custom value): {l}")
+            print(f"   FIXED LINK (use {{{{custom_values.masterclass_addevent}}}} instead): {l}")
     path = write_json(os.path.join(a.out, "dynamic-dates.json"),
                       {"custom_value_texts": sorted(learned), "test_params": a.test_params, "pages": results})
     print(f"\n-> {path}")

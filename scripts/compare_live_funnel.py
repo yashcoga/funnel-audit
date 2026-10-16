@@ -166,7 +166,14 @@ def compare(o, n):
 
     ofr = sorted({f["redirect"] for f in o.get("forms", []) if f.get("redirect")})
     nfr = sorted({f["redirect"] for f in n.get("forms", []) if f.get("redirect")})
-    if ofr or nfr:
+    if any(f.get("action") == "none" for f in n.get("forms", [])):
+        # GHL form element "On submit: none" = the form shows its own thank-you message and the visitor stays put
+        rows.append(row("Where the form sends people", fmt(ofr) if ofr else "next funnel step",
+                        "nowhere: shows the form's thank-you message", "missing",
+                        "Sign-ups stay on the opt-in and never reach the upsell or the thank-you page.",
+                        "GHL funnel editor → this step → click the form element → Action on submit: \"Go to next step\" (or the "
+                        "upsell URL). It's a page setting, so other funnels using the same form are not affected."))
+    elif ofr or nfr:
         st = "same" if ofr == nfr else "different"
         rows.append(row("Where the form sends people", fmt(ofr), fmt(nfr) if nfr else "next funnel step", st,
                         "" if st == "same" else "After the switch, sign-ups go somewhere else than today (fine if intended).",
@@ -221,20 +228,36 @@ CHECKLIST = [
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--old", required=True, help="opt-in that live ads and automations use today")
+    ap.add_argument("--old", help="opt-in that live ads and automations use today")
+    ap.add_argument("--old-json", help="switch-over.json from an earlier run: compare with the old page as it was "
+                                       "then (use after the switch, when the old page has been replaced)")
     ap.add_argument("--new", required=True, help="new opt-in that replaces it")
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="desktop", choices=["desktop", "mobile"])
     a = ap.parse_args()
+    if not (a.old or a.old_json):
+        ap.error("give --old URL or --old-json FILE")
     os.makedirs(a.out, exist_ok=True)
     with sync_playwright() as p:
         browser = launch(p)
-        o = collect(browser, a.old, a.device)
+        if a.old_json:
+            import json
+            o = json.load(open(a.old_json, encoding="utf-8"))["old"]
+            o["title"] = f"{o['title']} (snapshot)"
+        else:
+            o = collect(browser, a.old, a.device)
         n = collect(browser, a.new, a.device)
         browser.close()
+    if not a.old_json and (o.get("status") or 200) >= 400:
+        print(f"!! The old opt-in returns HTTP {o['status']}. If ads still point at it, they land on an error page.\n"
+              f"   To compare with the old page as it was, re-run with --old-json <earlier switch-over.json>.\n")
     rows = compare(o, n)
     bad = [r for r in rows if r["status"] not in ("same", "unknown")]
     critical = {"Form (the ID GHL workflows trigger on)", "GHL funnel step", "Meta pixel", "Page address (where the ads point)"}
+    if any(r["check"] == "Where the form sends people" and r["status"] == "missing" for r in rows):
+        critical.add("Where the form sends people")
+    if any(r["check"].startswith("Form (") and r["status"] == "same" for r in rows):
+        critical.discard("GHL funnel step")   # same form: only step-triggered workflows are at risk -> check in GHL
     short = lambda c: re.sub(r"\s*\(.*?\)", "", c).lower()
     verdict = ("Safe: the new opt-in keeps the old address, form and pixels." if not bad else
                f"Not safe to switch as built: {len(bad)} things differ ({', '.join(short(r['check']) for r in bad)}).")

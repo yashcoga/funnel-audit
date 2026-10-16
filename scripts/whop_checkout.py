@@ -75,7 +75,16 @@ def set_phone_us(f, page):
     for i in range(opts.count()):
         t = opts.nth(i).inner_text().strip()
         if t.startswith("United States") and "(+1)" in t:
-            opts.nth(i).click()
+            # the list is long and only partly drawn: scroll the option into view, then fall back to a DOM click
+            o = opts.nth(i)
+            try:
+                o.scroll_into_view_if_needed(timeout=3000)
+                o.click(timeout=5000)
+            except Exception:
+                try:
+                    o.evaluate("el => el.click()")
+                except Exception:
+                    page.keyboard.press("Enter")
             break
     page.wait_for_timeout(500)
     return bool(re.search(r"\bUS \(\+1\)", combo.first.inner_text()))
@@ -142,7 +151,18 @@ def run(browser, url, device, code, do_submit, email, cta):
         code = None
     if code:
         f.get_by_text(re.compile(r"(add|have a) (promo|discount|coupon) code", re.I)).first.click()
-        f.locator("input[name=code]").fill(code)
+        # Whop sometimes re-draws the form right after the code box opens (the box is "detached"): wait, retry
+        for attempt in range(4):
+            try:
+                page.wait_for_timeout(1200)
+                box = f.locator("input[name=code]")
+                box.click(timeout=8000)
+                box.press_sequentially(code, delay=60, timeout=8000)
+                if box.input_value(timeout=3000).lower() == code.lower():
+                    break
+            except Exception:
+                if not f.locator("input[name=code]").count():
+                    f.get_by_text(re.compile(r"(add|have a) (promo|discount|coupon) code", re.I)).first.click()
         f.get_by_role("button", name="Apply").click()
         t = ""
         for _ in range(15):

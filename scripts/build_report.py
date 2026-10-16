@@ -120,6 +120,8 @@ def build_html(d, base_dir):
     copy = d.get("copy_fixes", [])
     cc = d.get("copy_audit", {})
     nav = [("verdict", "Verdict")]
+    if d.get("funnel_steps"):
+        nav.append(("steps", "Steps &amp; SEO"))
     if d.get("switch_over"):
         nav.append(("switch", "Switch-over"))
     nav += [("index", "All fixes"), ("map", "Funnel map"), ("fixes", "Fix details")]
@@ -180,6 +182,31 @@ def build_html(d, base_dir):
     if v.get("working"):
         A('<div class="good"><h3>Working correctly</h3><ul>' + "".join(f"<li>{L(x)}</li>" for x in v["working"]) + "</ul></div>")
     A("</section>")
+
+    # funnel steps (from GHL), wrong-page links and SEO / share meta tags
+    fs = d.get("funnel_steps")
+    if fs:
+        A('<section aria-labelledby="steps"><h2 id="steps">Funnel steps, wrong-page links &amp; SEO tags</h2>')
+        if fs.get("intro"):
+            A(f"<p>{L(fs['intro'])}</p>")
+        wl = fs.get("wrong_links") or []
+        if wl:
+            A('<h3>Links that land outside this funnel</h3><div class="tbl"><table><thead><tr><th>On page</th><th>Link</th><th>Lands on</th></tr></thead><tbody>')
+            for w in wl:
+                A(f'<tr><td>{L(w["page"])}</td><td>{L(w["link"])}</td><td class="fail">{L(w["lands_on"])}</td></tr>')
+            A("</tbody></table></div>")
+        else:
+            A('<p class="pass">Every link on the funnel pages stays inside this funnel.</p>')
+        A('<div class="tbl"><table><thead><tr><th>Page</th><th>Title now</th><th>Result</th><th>What to fix</th></tr></thead><tbody>')
+        for r in fs.get("rows", []):
+            iss = r.get("issues") or []
+            fix = ("<ul>" + "".join(f"<li>{L(x)}</li>" for x in iss) + "</ul>") if iss else "None"
+            A(f'<tr><td>{L(r["page"])}<br><span class="legal-pg">{esc(r.get("kind", ""))}</span></td><td>{L(r.get("title") or "")}</td>'
+              f'<td class="{STATUS.get(r.get("status"), "")}" style="white-space:nowrap">{L(r.get("status_text", ""))}</td><td>{fix}</td></tr>')
+        A("</tbody></table></div>")
+        if fs.get("notes"):
+            A(f'<p class="note">{L(fs["notes"])}</p>')
+        A("</section>")
 
     # switch-over from the live funnel (ads + automations run on the old opt-in)
     so = d.get("switch_over")
