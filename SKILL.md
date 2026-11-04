@@ -7,8 +7,28 @@ description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFu
 
 **What this is for:** funnels the team runs paid ads to, shaped like **free opt-in → one or more upsells →
 downsell(s) → confirmation / thank-you page(s)** (webinar, summit, challenge, workshop funnels). Any builder:
-GoHighLevel, Whop, ClickFunnels or custom HTML. The question every audit answers: *is this funnel ready to receive
-ad traffic, and what has to change first?*
+GoHighLevel, Whop, ClickFunnels or custom HTML. The question every audit answers: *can this funnel launch, and
+what has to change first?* "Launch" means it can go live: people can register, buy and reach the right confirmation,
+and nothing on the pages is broken, lost or legally wrong. It does **not** mean "ready to run ads" — see
+"Launch blockers vs highlights" below.
+
+## Launch blockers vs highlights (user rule, 2026-10-16)
+
+The verdict and the Critical tier are about **launch**, not ads. These are reported but **never** launch blockers:
+
+- **Missing ad pixels / purchase events** (no Meta/Google/TikTok pixel, no Lead, no Purchase, Purchase without value).
+  Most new funnels launch without sales tracking; the team shares this with the ads/tech people later. Report it in
+  the Tracking section and as one fix with severity `high` and chip `"Highlight · not a launch blocker"`, worded so
+  it can be forwarded as is. Never list it under the verdict's blockers.
+- **Urgency that a later page contradicts** (e.g. the downsell says "not offered again", then the thank-you page
+  re-offers it). Severity `medium`, chip `"Highlight · not a launch blocker"`, with the recommended wording.
+- **Buyer confirmation page with no download / access button** that tells buyers to check their email. That's the
+  team's standard; it's fine. Mention it once as a note (severity `polish`, chip `"Note · OK as is"`), not a fix.
+
+Use `verdict.status: "ready_with_fixes"` when only highlights and non-blocking fixes remain. Real launch blockers are
+things like: a published page or form that loses sign-ups, a broken or wrong "Yes"/"No thanks"/form redirect, a
+checkout that can't complete or shows the wrong price/product, wrong dates/times/links for the next live session,
+broken elements every visitor sees, and legal/consent text that is wrong for what the funnel sells.
 
 The user gives a **starting page** (usually the opt-in). Everything else is discovered by walking the funnel.
 Inputs:
@@ -133,7 +153,10 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
   `python "$S/whop_checkout.py" URL --out W/checkout --code CODE --device mobile` (dry run: plan, prices, code,
   whether the checkout is on screen after the "Yes" tap). It also handles checkouts that only load inside a pop-up
   after the "Yes" click (`checkout_in_popup`) and pages that hide Whop's own pay button and pay from a button on the
-  page (`pay_button_on_page`). `promo_error: No promo-code box` means Whop isn't showing the code field: it appears
+  page (`pay_button_on_page`). It handles both Whop checkouts: the classic embed and the newer Whop Elements checkout
+  (`checkout_type: Whop Elements`, cdn.whop.com/elements/amber), where the code goes in the "Promo code & details"
+  pop-up, prices are switched to USD for testers abroad, a Free total asks only for email + phone, and the redirect
+  after payment is set on the plan in Whop (confirm it with the test purchase). `promo_error: No promo-code box` means Whop isn't showing the code field: it appears
   only when the plan has an active promo code, so check the code exists for that plan before a purchase run.
   Then one real free (0.00) purchase on the upsell and one on the
   downsell: `... --code CODE --submit` (desktop is fine). Record payment IDs, redirect URLs and the pixel events
@@ -305,8 +328,9 @@ table; anything about persuasion goes in the copy & conversion review.
 - The checkout's own button and summary match the page (price, product name).
 
 **Conversion — thank-you pages**
-- Confirms the right date/time/link, tells buyers exactly how to access what they bought, gives the next steps in
-  order, and gives a reason to show up live (show-up rate). No contradictory re-offers.
+- Confirms the right date/time/link, tells buyers how they get what they bought ("check your email" is fine, no
+  download button needed), gives the next steps in order, and gives a reason to show up live (show-up rate).
+  Contradictory re-offers are a highlight, not a blocker.
 
 **Across the funnel**
 - Message match with the ads (ask for ad copy if available; otherwise list it as a check before launch).
@@ -349,13 +373,14 @@ anything looks wrong. Add `--pdf` only if the user asks for a PDF.
 
 Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
 
-1. **Verdict** — ready for ads or not, the blocking issues, and what works.
+1. **Verdict** — ready to launch or not, the launch blockers, and what works. Highlights (pixels, contradicted
+   urgency) go in a separate line under the verdict, never in the blocker list.
 1a. **Funnel steps & SEO** — every step with its title/description/share-image issues and every link that lands
    outside the funnel (build_report.py: the `funnel_steps` section, straight from `funnel-steps.json`).
 1b. **Switch-over from the live funnel** (when one exists) — old vs new table and the GHL checklist
    (build_report.py: the `switch_over` section, straight from `switch-over.json`).
 2. **Funnel map** — each page, what every CTA/link does, where each path ends (✓ / ✗).
-3. **Fix list** — ranked Critical (before ads) → High → Medium. Each fix: page, device, exactly where, a screenshot,
+3. **Fix list** — ranked Critical (before launch) → High → Medium. Each fix: page, device, exactly where, a screenshot,
    "Now" (exact current text/state) → "Change to" (exact replacement).
 4. **Copy fixes** — small wording fixes as Now → Change to rows.
 5. **Copy & conversion review** — one card per point: what we see (quoted), recommendation (with example wording),

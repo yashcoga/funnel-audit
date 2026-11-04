@@ -9,8 +9,10 @@ For each page and form factor: Performance score, FCP, LCP, TBT, CLS, Speed Inde
 "Core Web Vitals Assessment" (Chrome UX Report) and a shareable report link.
 
 SAFETY: Google's test browser fires the page's live ad pixels. Purchase thank-you pages would send a fake
-Purchase, so URLs containing "thank", "confirm", "receipt", "success" or "order-complete" are refused unless
---force is given. Test those with lighthouse.py instead (it blocks the pixels).
+Purchase, so pages that look like one are refused unless --force is given: URLs containing "thank", "confirm",
+"receipt", "success", "welcome", "access-granted", "order-complete" or "purchase", and pages whose title reads like
+one ("Thank you", "You're in", "Welcome", "Order confirmed"). Test those with lighthouse.py instead (it blocks the
+pixels).
 Writes DIR/pagespeed.json.
 """
 import argparse
@@ -25,9 +27,22 @@ import urllib.request
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import UA, launch, write_json  # noqa: E402
+from common import UA, launch, resolve, write_json  # noqa: E402
 
-UNSAFE = re.compile(r"thank|confirm|receipt|success|order-complete|purchase", re.I)
+# same words check_funnel_steps.py uses to spot thank-you pages, plus a few slugs seen on real funnels
+UNSAFE = re.compile(r"thank|confirm|receipt|success|welcome|access-granted|you-?re-?in|order-complete|purchase", re.I)
+UNSAFE_TITLE = re.compile(r"thank you|you'?re in|welcome|order confirmed|payment (received|successful)|"
+                          r"purchase (complete|confirmed)", re.I)
+
+
+def thank_you_reason(url):
+    """Why a URL looks like a thank-you page (None if it doesn't): its address, or its page title."""
+    if UNSAFE.search(urllib.parse.urlparse(url).path):
+        return "address"
+    title = resolve(url).get("title") or ""
+    if UNSAFE_TITLE.search(title):
+        return f"title {title!r}"
+    return None
 METRICS = ["First Contentful Paint", "Largest Contentful Paint", "Total Blocking Time", "Cumulative Layout Shift",
            "Speed Index"]
 FIELD = ["Largest Contentful Paint (LCP)", "Interaction to Next Paint (INP)", "Cumulative Layout Shift (CLS)",
@@ -128,9 +143,10 @@ def main():
     a = ap.parse_args()
     urls = []
     for u in a.urls:
-        if UNSAFE.search(urllib.parse.urlparse(u).path) and not a.force:
-            print(f"  SKIPPED {u}: looks like a thank-you/confirmation page (Google's test would fire a live Purchase). "
-                  f"Use lighthouse.py for it.")
+        why = None if a.force else thank_you_reason(u)
+        if why:
+            print(f"  SKIPPED {u}: looks like a thank-you/confirmation page ({why}); Google's test would fire a live "
+                  f"Purchase. Use lighthouse.py for it.")
             continue
         urls.append(u)
     if not urls:

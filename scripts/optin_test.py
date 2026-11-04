@@ -10,7 +10,8 @@ Steps:
   2. bad email + short phone -> validation messages
   3. valid fields, boxes unticked -> is a checkbox (SMS consent / terms) REQUIRED to register?
   4. --submit only: tick boxes, submit for real, record redirect URL, time to redirect and the pixel events that fired.
-     Steps 1-3 never submit for real. If the form has an anti-bot check (Cloudflare Turnstile, reCAPTCHA),
+     Steps 1-3 never submit for real. GHL's "Submission in progress" box (after an unfinished attempt) is closed
+     with "Start over" whenever it appears. If the form has an anti-bot check (Cloudflare Turnstile, reCAPTCHA),
      the real submit runs in a short-lived visible browser window, because those checks fail headless.
 Writes DIR/optin-<page>-<device>.json.
 """
@@ -169,12 +170,27 @@ def fill(page, fields, mode, name, email, phone):
 EMAIL_SEL = "input[type=email], input[name*=email i], input[placeholder*=email i]"
 
 
+def start_over(page, timeout_ms=4000):
+    """GHL remembers an unfinished form attempt and, on the next visit, covers the form with its own
+    "Submission in progress - Start over / Continue" box (its "Continue" would be taken for the submit button).
+    Click "Start over" if the box shows up. Returns True if it did."""
+    btn = page.get_by_role("button", name=re.compile(r"^\s*start over\s*$", re.I))
+    try:
+        btn.first.wait_for(state="visible", timeout=timeout_ms)
+    except Exception:
+        return False
+    btn.first.click()
+    page.wait_for_timeout(1200)
+    return True
+
+
 def load_form(page, reload=False):
     """(Re)load the page and wait until the form's email field is visible, then tag the fields."""
     if reload:
         page.reload(wait_until="domcontentloaded")
     page.locator(EMAIL_SEL).first.wait_for(state="visible", timeout=30000)
     page.wait_for_timeout(1200)
+    start_over(page, timeout_ms=4000 if reload else 1500)
     return page.evaluate(FIELDS_JS)
 
 

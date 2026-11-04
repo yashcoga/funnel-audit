@@ -21,7 +21,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import fetch_size, new_context, prepare, slug, write_json, launch  # noqa: E402
+from common import fetch_size, full_page_screenshot, new_context, prepare, slug, write_json, launch  # noqa: E402
 
 COLLECT_JS = r"""
 () => {
@@ -163,7 +163,7 @@ def scan(browser, url, device, out, allow_tracking=False, weigh_images=True):
     data = page.evaluate(COLLECT_JS)
     name = f"{slug(url)}-{device}"
     shot = os.path.join(out, f"{name}-full.png")
-    page.screenshot(path=shot, full_page=True)
+    full_page_screenshot(page, shot)
     data["screenshots"] = {"full": shot, "parts": split_screenshot(shot, device, os.path.join(out, name))}
     data["device"] = device
     data["requested_url"] = url

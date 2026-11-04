@@ -194,7 +194,54 @@ def prepare(page, url, wait_ms=2000, scroll=True, timeout=60000):
         page.evaluate("window.scrollTo(0, 0)")
         page.wait_for_timeout(900)
     unfix_backgrounds(page)
+    show_offscreen_content(page)
     return {"status": resp.status if resp else None, "final_url": page.url, "open_ms": int((time.time() - t0) * 1000)}
+
+
+# `content-visibility: auto` skips drawing sections that are off screen, so full-page screenshots show them blank.
+# Visitors never see that (sections are drawn as they scroll in), so draw everything before a screenshot.
+SHOW_OFFSCREEN_JS = r"""
+() => { let n = 0; for (const e of document.querySelectorAll('*')) {
+  if (getComputedStyle(e).contentVisibility === 'auto') { e.style.setProperty('content-visibility', 'visible', 'important'); n++; } }
+  return n; }
+"""
+
+
+def show_offscreen_content(page):
+    try:
+        n = page.evaluate(SHOW_OFFSCREEN_JS)
+        if n:
+            page.wait_for_timeout(500)
+        return n
+    except Exception:
+        return 0
+
+
+# Chrome can't draw one screenshot taller than 16,384 pixels: past that it repeats the top of the page.
+MAX_SHOT_PX = 16000
+
+
+def full_page_screenshot(page, path):
+    """Full-page screenshot that also works for very long pages (taken in pieces and joined)."""
+    w, h, dpr = page.evaluate("[document.documentElement.scrollWidth, "
+                              "Math.max(document.documentElement.scrollHeight, document.body.scrollHeight), devicePixelRatio]")
+    if h * dpr <= MAX_SHOT_PX:
+        page.screenshot(path=path, full_page=True)
+        return path
+    import io
+    from PIL import Image
+    step = int(MAX_SHOT_PX // dpr) - 100
+    pieces = []
+    for y in range(0, h, step):
+        clip = {"x": 0, "y": y, "width": w, "height": min(step, h - y)}
+        pieces.append(Image.open(io.BytesIO(page.screenshot(full_page=True, clip=clip))))
+    out = Image.new("RGB", (pieces[0].width, sum(p.height for p in pieces)), "white")
+    y = 0
+    for p in pieces:
+        out.paste(p, (0, y))
+        y += p.height
+    out.save(path)
+    return path
 
 
 # Full-page screenshots can't paint `background-attachment: fixed` (parallax) backgrounds: those sections come out as
