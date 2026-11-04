@@ -1,8 +1,13 @@
 """Test an opt-in form: validation, required SMS/consent boxes, and (optionally) a real test submission.
 
 Usage:
-  python optin_test.py URL --out DIR [--device desktop|mobile] [--submit]
+  python optin_test.py URL --out DIR --list-forms      # every form on the page, incl. pop-ups; sends nothing
+  python optin_test.py URL --out DIR [--device desktop|mobile] [--submit] [--open "button text"]
          [--name "Funnel AuditTest"] [--email x-audit-MMDD@mailinator.com] [--phone 2025550123]
+
+Every form gets tested, each with its own real test lead (--submit) and its own email (the default email is
+different per form). --list-forms prints the exact command for each form: forms on the page, pop-up forms
+(--open = the button that opens them) and forms in their own frame (tested on the form's own link).
 
 Without --submit (default) nothing is sent: the form-submit request and ad pixels are blocked.
 Steps:
@@ -184,10 +189,23 @@ def start_over(page, timeout_ms=4000):
     return True
 
 
-def load_form(page, reload=False):
+def open_form(page, open_text):
+    """Click the button that opens a pop-up form (e.g. "Join · Pay in Full")."""
+    if not open_text:
+        return
+    pat = re.compile(re.escape(open_text.strip()), re.I)
+    btn = page.locator("a, button, [role=button]").filter(has_text=pat).filter(visible=True).first
+    btn.scroll_into_view_if_needed(timeout=10000)
+    btn.click(timeout=10000)
+    page.wait_for_timeout(1500)
+
+
+def load_form(page, reload=False, open_text=None):
     """(Re)load the page and wait until the form's email field is visible, then tag the fields."""
     if reload:
         page.reload(wait_until="domcontentloaded")
+        page.wait_for_timeout(1500)
+    open_form(page, open_text)
     page.locator(EMAIL_SEL).first.wait_for(state="visible", timeout=30000)
     page.wait_for_timeout(1200)
     start_over(page, timeout_ms=4000 if reload else 1500)
@@ -226,7 +244,7 @@ def submit_context(p, browser, device, captcha_on_page):
     return b, ctx, TrackingLog(ctx, mode="observe")
 
 
-def run(p, browser, url, device, out, do_submit, name, email, phone):
+def run(p, browser, url, device, out, do_submit, name, email, phone, open_text=None):
     # Checks 1-3 never submit for real (form submits and pixels blocked), so they can't create an extra lead or
     # walk into the next page. Only the one real test lead at the end goes through, with live pixels.
     ctx, log = new_context(browser, device, tracking="block")
@@ -234,18 +252,26 @@ def run(p, browser, url, device, out, do_submit, name, email, phone):
     page = ctx.new_page()
     prepare(page, url, scroll=False)
     try:
-        info = load_form(page)
+        info = load_form(page, open_text=open_text)
     except Exception:
         info = None
     if not info:
+        frames = [] if page.is_closed() else page.evaluate(FORMS_NOW_JS)["frames"]
         ctx.close()
-        return {"url": url, "device": device, "error": "No form with an email field found on this page."}
-    res = {"url": url, "device": device, "fields": info["fields"], "submit_text": info["submit_text"], "steps": {}}
+        if frames:
+            return {"url": url, "device": device, "open": open_text,
+                    "error": "The form is in its own frame: test it on the form's own link instead: " + frames[0]}
+        return {"url": url, "device": device, "open": open_text,
+                "error": "No form with an email field found on this page"
+                         + (f" after clicking {open_text!r}." if open_text else
+                            ". If the form opens in a pop-up or sits in an embedded frame, run --list-forms.")}
+    res = {"url": url, "device": device, "open": open_text, "fields": info["fields"], "submit_text": info["submit_text"],
+           "steps": {}}
     res["steps"]["empty_submit"] = submit(page)
     fill(page, info["fields"], "bad", name, email, phone)
     res["steps"]["invalid_values"] = submit(page)
     # valid values, every checkbox unticked
-    info = load_form(page, reload=True)
+    info = load_form(page, reload=True, open_text=open_text)
     fill(page, info["fields"], "good", name, email, phone)
     for f in info["fields"]:
         if f["kind"] == "checkbox":
@@ -269,7 +295,7 @@ def run(p, browser, url, device, out, do_submit, name, email, phone):
     if do_submit:
         b2, ctx, log = submit_context(p, browser, device, has_captcha)
         try:
-            res["submission"] = real_submit(ctx, url, name, email, phone)
+            res["submission"] = real_submit(ctx, url, name, email, phone, open_text)
             res["submission"]["browser"] = "visible window (anti-bot check)" if b2 else "headless"
         finally:
             events += log.events
@@ -284,12 +310,93 @@ def run(p, browser, url, device, out, do_submit, name, email, phone):
     return res
 
 
-def real_submit(ctx, url, name, email, phone):
-    """Submit the one real test lead and record where it lands (or why it didn't)."""
+FORMS_NOW_JS = r"""
+() => {
+  const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const emails = [...document.querySelectorAll('input')].filter(i => vis(i) &&
+      (i.type === 'email' || /email/i.test(i.name + ' ' + i.placeholder)))
+    .map(i => { const f = i.closest('form, [id^=form-], [class*=form-builder]');
+      return (f && (f.id || f.getAttribute('data-form-id'))) || ((i.closest('[id]') || {}).id) || i.name || 'email'; });
+  const frames = [...document.querySelectorAll('iframe')].filter(f => vis(f) && /\/widget\/(form|survey)\//i.test(f.src || ''))
+    .map(f => f.src);
+  return {emails, frames};
+}
+"""
+
+OPENERS_JS = r"""
+() => {
+  const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const nearInputs = b => { let e = b; for (let i = 0; i < 5 && e; i++) { e = e.parentElement;
+      if (e && e.querySelector('input[type=email],input[type=tel],input[name*=email i]')) return true; } return false; };
+  const out = [];
+  for (const el of document.querySelectorAll('a, button, [role=button]')) {
+    if (!vis(el) || nearInputs(el)) continue;
+    const href = el.getAttribute('href') || '';
+    if (href && !href.startsWith('#') && !href.startsWith('javascript')) continue;   // goes to another page
+    const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
+    if (t.length >= 2 && t.length <= 60 && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+"""
+
+
+def list_forms(browser, url, device="desktop", max_buttons=30):
+    """Every form a visitor can fill on this page: forms on the page, and forms that open in a pop-up (found by
+    clicking each button that stays on the page). Nothing is submitted. Returns one entry per form, with the
+    optin_test.py command that tests it."""
+    ctx, log = new_context(browser, device, tracking="block", block_forms=True)
+    page = ctx.new_page()
+    prepare(page, url)
+    start_over(page, timeout_ms=1500)
+    base = page.evaluate(FORMS_NOW_JS)
+    forms, seen = [], set()
+
+    def add(key, entry):
+        if key not in seen:
+            seen.add(key)
+            forms.append(entry)
+
+    for k in base["emails"]:
+        add(k, {"where": "on the page", "test_url": url, "open": None})
+    for src in base["frames"]:
+        add(re.sub(r"\?.*", "", src), {"where": "embedded form frame on the page", "test_url": src, "open": None})
+    openers = page.evaluate(OPENERS_JS)[:max_buttons]
+    for text in openers:
+        try:
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_timeout(1500)
+            start_over(page, timeout_ms=1000)
+            before = page.url
+            open_form(page, text)
+            page.wait_for_timeout(1000)
+            if page.url.split("#")[0] != before.split("#")[0]:
+                continue
+            now = page.evaluate(FORMS_NOW_JS)
+        except Exception:
+            continue
+        for k in now["emails"]:
+            if k not in base["emails"]:
+                add(k, {"where": f"pop-up after clicking {text!r}", "test_url": url, "open": text})
+        for src in now["frames"]:
+            if src not in base["frames"]:
+                # a form inside its own frame: test it on the form's own link (same fields and redirect)
+                add(re.sub(r"\?.*", "", src),
+                    {"where": f"pop-up after clicking {text!r} (embedded form frame)", "test_url": src, "open": None})
+    ctx.close()
+    for f in forms:
+        f["command"] = f'optin_test.py "{f["test_url"]}"' + (f' --open "{f["open"]}"' if f["open"] else "")
+    return forms
+
+
+def real_submit(ctx, url, name, email, phone, open_text=None):
+    """Submit the one real test lead for this form and record where it lands (or why it didn't)."""
     gate = FormGate(ctx)
     page = ctx.new_page()
     prepare(page, url, scroll=False)
-    info = load_form(page)
+    info = load_form(page, open_text=open_text)
     fill(page, info["fields"], "good", name, email, phone)
     for f in info["fields"]:
         if f["kind"] == "checkbox":
@@ -340,15 +447,33 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="desktop", choices=["desktop", "mobile"])
     ap.add_argument("--submit", action="store_true", help="really submit the test lead (fires live pixels once)")
+    ap.add_argument("--open", default=None, help='text of the button that opens a pop-up form, e.g. "Join · Pay in Full"')
+    ap.add_argument("--list-forms", action="store_true",
+                    help="only list every form on the page (incl. pop-ups) with the command to test each; sends nothing")
     ap.add_argument("--name", default="Funnel AuditTest")
-    ap.add_argument("--email", default=f"funnel-audit-{datetime.date.today():%m%d}@mailinator.com")
+    ap.add_argument("--email", default=None, help="default: a different @mailinator.com address for every form")
     ap.add_argument("--phone", default="2025550123")
     a = ap.parse_args()
+    if a.list_forms:
+        with sync_playwright() as p:
+            browser = launch(p)
+            forms = list_forms(browser, a.url, a.device)
+            browser.close()
+        path = write_json(os.path.join(a.out, f"forms-{slug(a.url)}.json"), {"url": a.url, "forms": forms})
+        print(f"{len(forms)} form(s) on {a.url}. Test EACH one, with its own real test lead (--submit):")
+        for i, f in enumerate(forms, 1):
+            print(f"  {i}. {f['where']}\n     python {f['command']} --out DIR")
+        print("->", path)
+        return
+    # one test lead per form, each with its own email, so every lead can be found and cleaned up
+    tag = slug(a.url)[-8:] + (f"-{slug(a.open)[:10]}" if a.open else "")
+    email = a.email or f"funnel-audit-{datetime.date.today():%m%d}-{tag}@mailinator.com"
     with sync_playwright() as p:
         browser = launch(p)
-        res = run(p, browser, a.url, a.device, a.out, a.submit, a.name, a.email, a.phone)
+        res = run(p, browser, a.url, a.device, a.out, a.submit, a.name, email, a.phone, a.open)
         browser.close()
-    path = write_json(os.path.join(a.out, f"optin-{slug(a.url)}-{a.device}.json"), res)
+    name = f"optin-{slug(a.url)}" + (f"-{slug(a.open)[:20]}" if a.open else "") + f"-{a.device}"
+    path = write_json(os.path.join(a.out, f"{name}.json"), res)
     if res.get("error"):
         print(res["error"])
         return

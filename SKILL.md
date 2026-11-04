@@ -101,7 +101,7 @@ not the funnel pages. Don't check inboxes or report on it.
 ## Safety rules (always)
 
 - **Ad pixels are blocked by default** in every script (logged as "would have fired"). Only two things may fire live
-  events: the one real test opt-in (`optin_test.py --submit`) and the free test purchases (`whop_checkout.py --submit`, or the manual checkout test).
+  events: the real test leads, one per form (`optin_test.py --submit`), and the free test purchases (`whop_checkout.py --submit`, or the manual checkout test).
 - **Test lead:** name `Funnel AuditTest`, a disposable `@mailinator.com` email, fictional phone `2025550123`
   (555-01xx range). Never the user's own email or a real-looking number. (These are the script defaults.)
 - **Test purchases:** only with a 100%-off coupon code. `whop_checkout.py --submit` refuses unless the total is 0.00,
@@ -143,8 +143,12 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
 - Read each `FLAG` line. `hidden_element_with_text` is usually the hidden twin of a mobile-only/desktop-only block
   (normal in GoHighLevel); report it only if it's a leftover (e.g. links to another business). Compare twins:
   copy_review.py lists every desktop/mobile wording difference.
-- **Opt-in page:** `python "$S/optin_test.py" URL --out W/forms` (dry run: validation messages, whether the SMS
-  consent box is required). Then once, the real test lead: `... --submit`. Its redirect URL is the next page.
+- **Every form, not just the first one:** on every page with a form (opt-in, sales pages with "Join" pop-ups,
+  application pages) first run `python "$S/optin_test.py" URL --out W/forms --list-forms`. It clicks every button
+  that stays on the page and lists every form a visitor can fill (on the page, in a pop-up, or in its own frame),
+  with the exact command for each. Test **each** form: the dry run (validation messages, whether the SMS consent box
+  is required), then one real test lead per form with `--submit`. Each form gets its own test email automatically.
+  Each redirect URL is a next page to walk. A form that wasn't sent for real goes under "Not tested and why".
   If it reports "No redirect", read its `diagnosis` line before reporting anything: "sent nothing" or HTTP 429
   usually means an anti-bot or rate-limit problem on our side, not a broken form. Re-run once with a new `--email`
   (after 10–15 min for a 429); only report the form as broken if a normal browser fails too. Every lead the
