@@ -1,6 +1,6 @@
 ---
 name: funnel-audit
-description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
+description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
 ---
 
 # Funnel audit
@@ -26,7 +26,7 @@ The verdict and the Critical tier are about **launch**, not ads. These are repor
   team's standard; it's fine. Mention it once as a note (severity `polish`, chip `"Note · OK as is"`), not a fix.
 
 Use `verdict.status: "ready_with_fixes"` when only highlights and non-blocking fixes remain. Real launch blockers are
-things like: a published page or form that loses sign-ups, a broken or wrong "Yes"/"No thanks"/form redirect, a
+things like: **a root domain that shows an error (step 1a)**, a published page or form that loses sign-ups, a broken or wrong "Yes"/"No thanks"/form redirect, a
 checkout that can't complete or shows the wrong price/product, wrong dates/times/links for the next live session,
 broken elements every visitor sees, and legal/consent text that is wrong for what the funnel sells.
 
@@ -90,7 +90,7 @@ When everything passes, and the user hasn't given a URL yet (or invoked the skil
 
 ## Scope
 
-In scope: page flow, every CTA/link, forms and validation, checkout, redirects, pixel events, copy (desktop +
+In scope: the root domain, page flow, every CTA/link, forms and validation, checkout, redirects, pixel events, copy (desktop +
 mobile, accuracy and conversion), mobile layout, page speed, compliance basics (privacy policy, SMS consent,
 claims, refund text), and **every legal page linked from the funnel** (footer Terms / Privacy / Refund / Disclaimer /
 Support / Contact pages): they are part of the funnel and get the same scan, copy check and screenshots.
@@ -127,6 +127,28 @@ Post one short line to the user as each step starts ("Scanning the opt-in on des
   expected funnel URLs, old pages that may still be published.
 - Earlier fix lists in the project folder (PDF/MD/HTML): note each item to re-check.
 - Current date/time in the event's time zone (US events: ET) — stale dates are the most common critical issue.
+
+### 1a. Root domain (always, every funnel, first check on the pages) (user rule, 2026-11-09)
+
+`python "$S/check_root_domain.py" <start URL> --out W`
+
+A funnel page can work (`brand.com/join`) while the domain itself (`brand.com`) shows "404 Page not found", because
+no default page was set for the domain. Anyone who types the address, shortens a link or taps a logo hits the error.
+
+It opens `https://<domain>/` on desktop and mobile, the www / non-www twin, `http://<domain>/`, and the main domain
+if the funnel is on a subdomain. Broken means an HTTP error, no DNS, an SSL error, or a page that says 404 / not found /
+parked or is blank, even when it's sent as status 200.
+
+- **Root broken (or main domain above a subdomain broken) = Critical and always a launch blocker.** List it first in
+  the verdict's blockers. If step 2b also has a blocker, this one still goes first. A passing funnel never overrides it.
+- `www` or `http://` broken on their own, or `http://` not moving to `https://` = High. If they only redirect to the
+  broken root, the script counts them under the root fix.
+- `Confirm` = the root works but shows a different page from this funnel. Open the screenshot: if it's an old offer
+  or another client's page, raise it to Critical; if it's the client's real website or a split-test version of the
+  opt-in, it's fine.
+- `CHECK` = the server refused the automated browser (403 / 429 / 503). Open it in a normal browser before reporting.
+- Copy `root_domain` from `W/root-domain.json` into findings.json and put its `fixes` at the top of the fix list.
+- Any link or logo on the funnel that lands on `/` is broken too while the root is broken: list those in the same fix.
 
 ### 2. Walk the funnel
 
@@ -172,8 +194,9 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
 - Find the **buyer's** thank-you page too, not only the decline path. If the test purchase can't complete, try
   common slugs (`/confirmation`, `/vip-confirmation`, `/thank-you-vip`, `/order-confirmation`) with curl. GHL
   sends unknown slugs to `/`, so check where each one really lands.
-- Also scan old/unlisted pages from the sheet (e.g. a previous upsell) and the domain's home page `/`: are they
-  still published, and do they still match the live offer? Ads and shared links often point at them.
+- Also scan old/unlisted pages from the sheet (e.g. a previous upsell) and the domain's home page `/` when step 1a
+  shows it works: are they still published, and do they still match the live offer? Ads and shared links often point
+  at them.
 - Other checkout types: see "Manual fallback".
 
 ### 2a. Funnel steps, wrong-page links and SEO meta tags (always, after test_ctas.py has run on every page)
@@ -379,6 +402,8 @@ Report content, in this order (the builder handles layout, index, links and "Bac
 
 1. **Verdict** — ready to launch or not, the launch blockers, and what works. Highlights (pixels, contradicted
    urgency) go in a separate line under the verdict, never in the blocker list.
+1. **Root domain** — every address tested, where it lands, result and what to do, with screenshots (build_report.py:
+   the `root_domain` section, straight from `root-domain.json`).
 1a. **Funnel steps & SEO** — every step with its title/description/share-image issues and every link that lands
    outside the funnel (build_report.py: the `funnel_steps` section, straight from `funnel-steps.json`).
 1b. **Switch-over from the live funnel** (when one exists) — old vs new table and the GHL checklist
@@ -462,6 +487,9 @@ URL, payment ID and pixel events. If the Playwright MCP isn't installed, the use
   built as a new funnel with a new form (e.g. `Masterclass October 2026`) and no Meta pixel, while ads,
   two pixels and every workflow ran on the old funnel's form (e.g. `Masterclass 8-2024`). Nothing errors:
   sign-ups simply stop getting tags, emails and SMS. `compare_live_funnel.py` catches this; run it every time.
+- **A working funnel can sit on a broken domain.** `coachkblackfriday.com/join-waitlist` worked while
+  `coachkblackfriday.com` showed GHL's "404 Page not found!", and `www` and `http://` redirected into the same error.
+  Walking the funnel from its opt-in never touches the root, so `check_root_domain.py` runs on every audit.
 - **"The link works" ≠ "the link is right".** In the Coach K re-audit the upsell's "No thanks" was set to a page
   from the OLD funnel (old design), and it was first reported as fixed because it navigated somewhere. Always open
   the destination and compare it with the funnel (check_funnel_steps.py flags pages outside the step list).

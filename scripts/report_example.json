@@ -22,6 +22,30 @@
    "Real $0 test purchase completed on the upsell."
   ]
  },
+ "root_domain": {
+  "intro": "The bare domain and its other versions, opened the way a visitor would (check_root_domain.py → root-domain.json).",
+  "verdict": "Not configured properly: https://example.com/ is broken (HTTP 404). Launch blocker.",
+  "ok": false,
+  "rows": [
+   {
+    "check": "Root of the funnel's domain",
+    "address": "https://example.com/",
+    "lands_on": "https://example.com/",
+    "http": 404,
+    "status": "fail",
+    "status_text": "Broken",
+    "found": "HTTP 404. The page says: \"404 Page not found!\"",
+    "action": "In GoHighLevel open the domain settings (Settings → Domains) and set its default step/page to the funnel's first page."
+   }
+  ],
+  "screenshots": [
+   {
+    "file": "root-domain/root-desktop.png",
+    "caption": "https://example.com/ on desktop: Broken",
+    "mobile": false
+   }
+  ]
+ },
  "switch_over": {
   "intro": "Ads and automations run on the old opt-in today. The new opt-in was compared with it (compare_live_funnel.py → switch-over.json).",
   "verdict": "Not safe to switch as built: 2 things differ (form, meta pixel).",

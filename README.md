@@ -5,6 +5,8 @@ with screenshots showing exactly where.
 
 Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 
+- **Root domain:** the bare domain (and its www and http versions) must open a real page. A 404 there is a launch
+  blocker, even when the funnel pages themselves work.
 - **Flow:** opt-in → upsell → downsell → thank-you pages. Every button and link is clicked, the opt-in form is
   tested and submitted with a test lead, and a **real $0 test purchase** is placed on the upsell and the downsell
   using your 100%-off coupon code.
@@ -112,6 +114,7 @@ A full audit usually takes 30–60 minutes. Claude posts a short update as each 
 |---|---|
 | `SKILL.md` | The audit playbook Claude follows (steps, safety rules, copy & conversion checklist, report format) |
 | `scripts/check_setup.py` | Checks Python packages, Chromium and Node.js; prints install steps for anything missing |
+| `scripts/check_root_domain.py` | Checks the bare domain, www / http versions and main domain open a real page (404, DNS, SSL, parked, blank) |
 | `scripts/scan_page.py` | Scans a page on desktop + mobile: links, buttons, images, text, dates, invisible text, duplicates, sideways scroll, heavy images, pixels, screenshots |
 | `scripts/test_ctas.py` | Clicks every button and link and records where it lands (incl. "is the checkout on screen?") |
 | `scripts/check_links.py` | Checks every link, calendar invites (date, Zoom link) and whether privacy/terms pages exist |

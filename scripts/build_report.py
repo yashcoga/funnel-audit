@@ -120,6 +120,8 @@ def build_html(d, base_dir):
     copy = d.get("copy_fixes", [])
     cc = d.get("copy_audit", {})
     nav = [("verdict", "Verdict")]
+    if d.get("root_domain"):
+        nav.append(("root", "Root domain"))
     if d.get("funnel_steps"):
         nav.append(("steps", "Steps &amp; SEO"))
     if d.get("switch_over"):
@@ -182,6 +184,24 @@ def build_html(d, base_dir):
     if v.get("working"):
         A('<div class="good"><h3>Working correctly</h3><ul>' + "".join(f"<li>{L(x)}</li>" for x in v["working"]) + "</ul></div>")
     A("</section>")
+
+    # root domain: does the bare domain open a real page?
+    rd = d.get("root_domain")
+    if rd:
+        A('<section aria-labelledby="root"><h2 id="root">Root domain</h2>')
+        if rd.get("intro"):
+            A(f"<p>{L(rd['intro'])}</p>")
+        if rd.get("verdict"):
+            A(f'<div class="verdict {"ready" if rd.get("ok") else ""}"><strong class="v">{L(rd["verdict"])}</strong></div>')
+        A('<div class="tbl"><table><thead><tr><th>Address</th><th>Lands on</th><th>Result</th><th>What we found</th><th>What to do</th></tr></thead><tbody>')
+        for r in rd.get("rows", []):
+            A(f'<tr><td>{L(r["address"])}<br><span class="legal-pg">{esc(r.get("check", ""))}</span></td><td>{L(r.get("lands_on", ""))}</td>'
+              f'<td class="{STATUS.get(r.get("status"), "")}" style="white-space:nowrap">{L(r.get("status_text", ""))}</td>'
+              f'<td>{L(r.get("found", ""))}</td><td>{L(r.get("action", ""))}</td></tr>')
+        A("</tbody></table></div>")
+        for s in rd.get("screenshots", []):
+            A(figure(s, base_dir, L))
+        A("</section>")
 
     # funnel steps (from GHL), wrong-page links and SEO / share meta tags
     fs = d.get("funnel_steps")
