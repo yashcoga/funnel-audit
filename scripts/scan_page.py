@@ -11,6 +11,9 @@ Writes, per device:
 Automatic flags (in "flags"): invisible/low-contrast text, duplicate paragraphs, sideways scroll on mobile,
 broken images, oversized images, images without width/height, dates and time zones, empty headings,
 no privacy/terms links, hidden elements that contain text (leftovers), console errors.
+Design flags (the "design" block in the JSON): first button/form below the first screen, headline too long,
+one word alone on a last line, button text wrapping on mobile, body text under 16px on mobile, blurry images,
+more than 3 font families.
 Ad pixels are blocked by default (logged as "would have fired").
 """
 import argparse
@@ -95,8 +98,10 @@ COLLECT_JS = r"""
 
   // --- elements wider than the screen (sideways scroll)
   const W = document.documentElement.clientWidth;
+  // inside a swipe row / clipped box (overflow-x not visible) = not page-level sideways scroll
+  const clipped = e => { for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) if (getComputedStyle(p).overflowX !== 'visible') return true; return false; };
   const overflow = [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect();
-    return r.width > 0 && r.right > W + 2 && getComputedStyle(e).position !== 'fixed'; })
+    return r.width > 0 && r.right > W + 2 && getComputedStyle(e).position !== 'fixed' && !e.closest('svg') && !clipped(e); })
     .slice(0, 8).map(e => ({tag: e.tagName.toLowerCase(), cls: (e.className + '').slice(0, 60), right: Math.round(e.getBoundingClientRect().right), box: box(e)}));
 
   const nav = performance.getEntriesByType('navigation')[0] || {};
@@ -115,6 +120,70 @@ COLLECT_JS = r"""
       requests: performance.getEntriesByType('resource').length},
     scripts: [...document.scripts].map(s => s.src).filter(Boolean).map(s => s.slice(0, 140)),
   };
+}
+"""
+
+# Design measurements (shared design checklist with page-design-review): first screen, headline length, small text,
+# lone last-line words, wrapping buttons, fonts in use. Runs after the screenshot.
+DESIGN_JS = r"""
+() => {
+  const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity) > 0.05; };
+  const top = el => Math.round(el.getBoundingClientRect().top + scrollY);
+  const txt = el => (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ');
+  const vh = innerHeight, pageH = document.body.scrollHeight;
+  const isBtnLink = a => /btn|button|cta/i.test((a.className || '') + '') || getComputedStyle(a).display.includes('block') && parseFloat(getComputedStyle(a).paddingTop) >= 8;
+  const ctaEls = [...document.querySelectorAll('button, [role=button], input[type=submit], a[href]')]
+    .filter(e => vis(e) && (e.tagName !== 'A' || isBtnLink(e)) && txt(e || '').length + (e.value || '').length > 1);
+  const formFrames = [...document.querySelectorAll('iframe')].filter(f => vis(f) && /widget\/(form|survey)|leadconnector|msgsndr|form/i.test(f.src || ''));
+  const cands = [...ctaEls.map(e => ({y: top(e), text: (txt(e) || e.value || '').slice(0, 60)})),
+                 ...formFrames.map(f => ({y: top(f), text: '(form in a frame)'}))].filter(c => c.y >= 0).sort((a, b) => a.y - b.y);
+  const firstAction = cands[0] || null;
+
+  // per-word line positions: is the last line a single word? how many lines?
+  const lines = el => { const words = []; const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n; (n = w.nextNode());) { const re = /\S+/g; let m;
+      while ((m = re.exec(n.textContent))) { const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length);
+        const rc = r.getClientRects()[0]; if (rc && rc.width > 0) words.push({w: m[0], t: Math.round(rc.top)}); } }
+    const tops = []; for (const x of words) if (!tops.some(t => Math.abs(t - x.t) < 4)) tops.push(x.t);
+    const last = words.length ? words[words.length - 1] : null;
+    const onLast = last ? words.filter(x => Math.abs(x.t - last.t) < 4) : [];
+    return {n: tops.length, words: words.length, lastLine: onLast.map(x => x.w).join(' '), lastTop: last ? Math.round(last.t + scrollY) : 0}; };
+
+  const heads = [...document.querySelectorAll('h1,h2,h3')].filter(vis).map(h => {
+    const cs = getComputedStyle(h); const L = lines(h);
+    return {tag: h.tagName.toLowerCase(), y: top(h), size: cs.fontSize, lines: L.n, text: txt(h).slice(0, 100)}; });
+  // main headline = the biggest-font heading on the first screen (GHL often uses h2/p for the headline)
+  const firstScreen = [...document.querySelectorAll('h1,h2,h3,p,div')].filter(e => vis(e) && top(e) < vh &&
+    [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 8));
+  let headline = null;
+  for (const e of firstScreen) { const s = parseFloat(getComputedStyle(e).fontSize);
+    if (!headline || s > headline.px) headline = {px: s, el: e}; }
+  const hl = headline ? {text: txt(headline.el).slice(0, 120), size: Math.round(headline.px) + 'px', y: top(headline.el), lines: lines(headline.el).n} : null;
+
+  // lone word on the last line (headings, paragraphs, list items, buttons)
+  const lone = [], wrapBtns = [], small = [], seenLone = new Set();
+  const blocks = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,button,a,label,span,div')].filter(e => vis(e) &&
+    [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 1));
+  const legal = /privacy|terms|disclaimer|©|copyright|rights reserved|not (a )?guarantee|results (may|will) vary|facebook|meta platforms/i;
+  for (const e of blocks) {
+    const t = txt(e); if (t.length < 3) continue;
+    const L = lines(e);
+    const btn = e.matches('button,[role=button]') || (e.tagName === 'A' && isBtnLink(e));
+    const key = L.lastLine + '@' + L.lastTop;
+    if (L.n >= 2 && L.words >= 2 && !L.lastLine.includes(' ') && /[A-Za-z0-9]{2,}/.test(L.lastLine) && !seenLone.has(key)) {
+      seenLone.add(key); lone.push({text: t.slice(0, 120), last_word: L.lastLine, tag: e.tagName.toLowerCase(), y: top(e)}); }
+    if (btn && L.n >= 2 && t.length < 60) wrapBtns.push({text: t, lines: L.n, y: top(e)});
+    const fs = parseFloat(getComputedStyle(e).fontSize);
+    if (fs < 16 && t.length > 60 && !legal.test(t) && top(e) < pageH - 900 && !e.closest('footer,form,label'))
+      small.push({text: t.slice(0, 90), size: fs + 'px', y: top(e)});
+  }
+  const fonts = {};
+  for (const e of blocks) { const f = getComputedStyle(e).fontFamily.split(',')[0].replace(/["']/g, '').trim(); fonts[f] = (fonts[f] || 0) + 1; }
+  const dedupe = arr => { const s = new Set(); return arr.filter(x => { const k = x.text.slice(0, 50); if (s.has(k)) return false; s.add(k); return true; }); };
+  return {first_screen_h: vh, first_action: firstAction, headline: hl, headings: heads.slice(0, 40),
+          lone_words: dedupe(lone).slice(0, 25), wrapping_buttons: dedupe(wrapBtns).slice(0, 10),
+          small_text: dedupe(small).slice(0, 10), fonts};
 }
 """
 
@@ -165,6 +234,11 @@ def scan(browser, url, device, out, allow_tracking=False, weigh_images=True):
     shot = os.path.join(out, f"{name}-full.png")
     full_page_screenshot(page, shot)
     data["screenshots"] = {"full": shot, "parts": split_screenshot(shot, device, os.path.join(out, name))}
+    try:
+        page.evaluate("window.scrollTo(0, 0)")
+        data["design"] = page.evaluate(DESIGN_JS)
+    except Exception as e:  # never let the design pass break the scan
+        data["design"] = {"error": str(e)[:200]}
     data["device"] = device
     data["requested_url"] = url
     data["http"] = nav
@@ -218,6 +292,42 @@ def scan(browser, url, device, out, allow_tracking=False, weigh_images=True):
             flags.append({"type": "heavy_image", "severity": "medium",
                           "detail": {"src": img["src"], "kb": b // 1024, "type": img.get("content_type")},
                           "why": "Over 300 KB; convert to WebP/compress."})
+        if (img["visible"] and img["natural_w"] and img["shown_w"] >= 120 and not img["broken"]
+                and ".svg" not in (img["src"] or "").lower() and img["natural_w"] < 0.9 * img["shown_w"]):
+            flags.append({"type": "blurry_image", "severity": "medium",
+                          "detail": {"src": img["src"][-90:], "natural_w": img["natural_w"], "shown_w": img["shown_w"]},
+                          "why": "Image file is narrower than the space it fills, so it looks soft. Upload one at least 2x the shown width."})
+    # ---- design measurements (see the "Design review" step in SKILL.md)
+    dz = data.get("design") or {}
+    fa, vh = dz.get("first_action"), dz.get("first_screen_h") or 0
+    if vh:
+        limit = vh if device == "desktop" else int(vh * 1.5)
+        if not fa:
+            flags.append({"type": "no_cta_found", "severity": "check",
+                          "why": "No button or form found; check the screenshot (pop-up or custom element?)."})
+        elif fa["y"] > limit:
+            flags.append({"type": "cta_below_first_screen", "severity": "high" if device == "desktop" else "medium",
+                          "detail": fa, "why": f"First button/form starts at {fa['y']}px; the first screen is {vh}px tall"
+                          + (" (on a phone it should be within about 1.5 screens)." if device == "mobile" else ".")})
+    hl = dz.get("headline")
+    if hl and hl["lines"] > (3 if device == "desktop" else 4):
+        flags.append({"type": "headline_too_long", "severity": "medium", "detail": hl,
+                      "why": f"Main headline runs {hl['lines']} lines at {hl['size']}; aim for "
+                             + ("3 or fewer on desktop." if device == "desktop" else "4 or fewer on a phone.")})
+    if dz.get("lone_words"):
+        flags.append({"type": "lone_word_last_line", "severity": "polish", "detail": dz["lone_words"][:8],
+                      "why": f"{len(dz['lone_words'])} text block(s) end with one word alone on the last line (team rule: never). "
+                             "Fix with text-wrap: balance/pretty or &nbsp; between the last two words."})
+    if device == "mobile" and dz.get("wrapping_buttons"):
+        flags.append({"type": "button_text_wraps", "severity": "polish", "detail": dz["wrapping_buttons"][:5],
+                      "why": "Button text breaks onto 2+ lines on a phone; shorten it or reduce the size."})
+    if device == "mobile" and dz.get("small_text"):
+        flags.append({"type": "small_body_text", "severity": "medium", "detail": dz["small_text"][:5],
+                      "why": "Body text under 16px on a phone is hard to read (footer/legal lines excluded)."})
+    fams = [f for f, n in (dz.get("fonts") or {}).items() if n >= 3]
+    if len(fams) > 3:
+        flags.append({"type": "many_fonts", "severity": "polish", "detail": fams,
+                      "why": "More than 3 font families in use; check against the client's design system."})
     unsized = [i["src"] for i in data["images"] if i["visible"] and not i["has_size_attrs"]]
     if unsized:
         flags.append({"type": "images_without_size", "severity": "check", "detail": len(unsized),
@@ -268,6 +378,13 @@ def main():
             print(f"   visible links: {len(vis_links)}, visible buttons: {len(vis_btns)}, images: {len(data['images'])}, "
                   f"iframes: {len(data['iframes'])}, FCP: {data['timing']['fcp_ms']} ms")
             print(f"   tracking (blocked={not a.allow_tracking}): {', '.join(data['tracking_summary'][:12]) or 'none'}")
+            dz = data.get("design") or {}
+            if dz.get("first_screen_h"):
+                fa, hl = dz.get("first_action"), dz.get("headline")
+                print(f"   design: first screen {dz['first_screen_h']}px, first button/form at "
+                      f"{fa['y'] if fa else 'none'}px{' (' + fa['text'] + ')' if fa else ''}, headline "
+                      f"{(str(hl['lines']) + ' lines at ' + hl['size']) if hl else '?'}, fonts: "
+                      f"{', '.join(f for f, n in dz.get('fonts', {}).items() if n >= 3)}")
             for f in data["flags"]:
                 det = f.get("detail")
                 det = (str(det)[:150] + "...") if det is not None and len(str(det)) > 150 else det

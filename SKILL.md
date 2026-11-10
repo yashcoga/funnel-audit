@@ -1,6 +1,6 @@
 ---
 name: funnel-audit
-description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
+description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review and a full design review (first screen, layout, spacing, type, form polish, images, proof, brand consistency) on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
 ---
 
 # Funnel audit
@@ -40,6 +40,9 @@ checkout that can't complete or shows the wrong price/product, wrong dates/times
 broken elements every visitor sees, and legal/consent text that is wrong for what the funnel sells.
 
 ## Fix buckets (same in funnel-audit and page-design-review, user rule 2026-11-10)
+
+This skill also runs the whole design review (step 4a), so one funnel-audit run replaces running page-design-review
+separately. page-design-review stays for pages whose domain and products aren't linked yet.
 
 Every fix gets two labels, written together like **"Critical · Confirm first"**:
 
@@ -122,7 +125,7 @@ When everything passes, and the user hasn't given a URL yet (or invoked the skil
 ## Scope
 
 In scope: the root domain, page flow, every CTA/link, forms and validation, checkout, redirects, pixel events, copy (desktop +
-mobile, accuracy and conversion), mobile layout, page speed, compliance basics (privacy policy, SMS consent,
+mobile, accuracy and conversion), design (step 4a), mobile layout, page speed, compliance basics (privacy policy, SMS consent,
 claims, refund text), and **every legal page linked from the funnel** (footer Terms / Privacy / Refund / Disclaimer /
 Support / Contact pages): they are part of the funnel and get the same scan, copy check and screenshots.
 
@@ -158,6 +161,12 @@ Post one short line to the user as each step starts ("Scanning the opt-in on des
   expected funnel URLs, old pages that may still be published.
 - Earlier fix lists in the project folder (PDF/MD/HTML): note each item to re-check.
 - Current date/time in the event's time zone (US events: ET) — stale dates are the most common critical issue.
+- **Client context (for the design and copy review):** find the client's project folder (the one you're in, or ask
+  with clickable options). Read its `CLAUDE.md`, the design system (e.g. `design/design-system.md`: brand colours,
+  fonts, live styles) and the approved proof figures (e.g. the client profile in `brain/`). Apply every client rule in
+  the user's memory (e.g. banned photos, which way the host's photo must face, scripts not allowed on certain pages,
+  review exclusions). Look at the screenshots of the client's other live funnels if the folder has them. No client
+  folder? Say so under "Not tested and why" and judge consistency across this funnel's own pages only.
 
 ### 1a. Root domain (always, every funnel, first check on the pages) (user rule, 2026-11-09)
 
@@ -192,7 +201,8 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
 
 - **Look at every screenshot part** the scan prints (`W/scans/<page>-desktop-part-N.png`, `-mobile-part-N.png`)
   with the Read tool. The flags catch a lot (invisible text, duplicates, sideways scroll, oversized images, dates,
-  missing privacy link), but only looking catches layout and design problems.
+  missing privacy link, and the design flags used in step 4a), but only looking catches layout and design problems.
+  Note what you see per page as you go; step 4a turns it into fixes.
 - Read each `FLAG` line. `hidden_element_with_text` is usually the hidden twin of a mobile-only/desktop-only block
   (normal in GoHighLevel); report it only if it's a leftover (e.g. links to another business). Compare twins:
   copy_review.py lists every desktop/mobile wording difference.
@@ -403,6 +413,52 @@ table; anything about persuasion goes in the copy & conversion review.
 - Message match with the ads (ask for ad copy if available; otherwise list it as a check before launch).
 - One consistent promise and product name from ad → opt-in → offers → thank-you.
 
+### 4a. Design review (always, every page, desktop and mobile)
+
+The design pass from page-design-review, folded in so one run covers everything. Things already checked elsewhere
+are NOT repeated here: links and where they land (step 2), legal links in the footer (step 3), sideways scroll,
+invisible text and broken/oversized images (scan flags), wording, typos and proof *content* (step 4). This step is
+about how each page **looks and reads**. Only flag what a visitor would notice or what costs sign-ups or sales.
+
+**Start from the scan's `design` flags** (in `W/scans/<page>-<device>.json` → `flags`, and the `design:` line it
+prints): `cta_below_first_screen`, `headline_too_long`, `lone_word_last_line`, `button_text_wraps`,
+`small_body_text`, `blurry_image`, `many_fonts`. Confirm each one on the screenshot before reporting it. Then go
+section by section through every page, desktop then mobile, with the checklist:
+
+- **First screen:** form button or CTA visible on a 900px laptop screen and within about 1.5 screens on a phone
+  (GHL forms in a frame: read the button position off the screenshot). Headline over ~3 lines on desktop or ~4 on
+  mobile is usually too big. Is the host's face visible on the first screen?
+- **Hierarchy & type:** one clear headline, consistent heading styles, body text 16px+ on mobile, button text on one
+  line on mobile. **No word alone on the last line** of any headline, paragraph, list item or button (team rule:
+  fix with `text-wrap: balance` / `pretty` or `&nbsp;` between the last two words).
+- **Spacing & alignment:** uneven gaps (especially inside forms), empty columns next to tall elements, cards in a
+  row with different heights, centred lists with ragged icons, elements touching or overlapping the edges.
+- **Form polish** (step 2 tests that it *works*; here: how it *looks*): field order and required marks, broken or
+  odd icons in fields, where the consent and privacy lines sit, stray boxes or backgrounds behind the button, a
+  "your info is safe" line.
+- **Images:** flattering host photo or video thumbnail (smiling, eyes toward the copy), sharp, no banned photos,
+  logos as real logos (not text pills), badges not covering faces.
+- **Buttons:** one consistent button style and wording across the funnel; fake "play" buttons that are really links
+  make clear what happens.
+- **Proof layout:** testimonials laid out evenly with photo + name + role; "featured on" and credentials easy to
+  scan; figures match the client's approved numbers (flag a mismatch, don't rewrite the claim).
+- **Consistency:** pages match the client's design system and other live funnels, and each other (upsell, downsell,
+  thank-you look like the same funnel). A deliberate new look → one "Confirm first" item asking if it's intended.
+- **Visual glitches:** text cut off, overlapping elements, text that shows on desktop but is missing on mobile.
+- **Mobile only:** section order (what moves above/below the form), tap targets, swipe rows, sticky bars covering
+  content.
+
+Zoom in (crop with PIL) on anything small before calling it a fault. Never invent facts, figures, testimonials or
+assets: ask for them as "Confirm first" and add the question to the client's open-items file (e.g.
+`brain/06-open-items.md`) when it's a real open question.
+
+**How design fixes go in the report (user rule, 2026-11-11):** in the same single fix list as everything else, with
+the same tiers and actions. Critical, High and Medium design fixes each get their own entry and screenshot.
+**Polish design items are grouped: one fix per page** (e.g. "Polish on /upsell: 6 small design fixes"), each item
+a bullet with device, where, and the exact change; one screenshot showing the main spots is enough. Add 3–5 design
+"keep it" points (what already works and shouldn't be touched) to `verdict.working`. Typical: 10–15 extra minutes
+per page.
+
 ### 5. Page speed
 
 ```
@@ -440,7 +496,7 @@ anything looks wrong. Add `--pdf` only if the user asks for a PDF.
 
 Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
 
-1. **Verdict** — ready to launch or not, the launch blockers, and what works. Highlights (pixels, contradicted
+1. **Verdict** — ready to launch or not, the launch blockers, and what works (including the design "keep it" points). Highlights (pixels, contradicted
    urgency) go in `verdict.highlights` (shown as a separate line under the verdict), never in the headline or the
    blocker list. Never "ready for ads" wording (see "Launch blockers vs highlights").
 1. **Root domain** — every address tested, where it lands, result and what to do, with screenshots (build_report.py:
@@ -450,7 +506,7 @@ Report content, in this order (the builder handles layout, index, links and "Bac
 1b. **Switch-over from the live funnel** (when one exists) — old vs new table and the GHL checklist
    (build_report.py: the `switch_over` section, straight from `switch-over.json`).
 2. **Funnel map** — each page, what every CTA/link does, where each path ends (✓ / ✗).
-3. **Fix list** — ranked Critical (before launch) → High → Medium → Polish, each with its action (Change now / Confirm first). Each fix: page, device, exactly where, a screenshot,
+3. **Fix list** — functional, copy and design fixes together (step 4a: Polish design items grouped one fix per page), ranked Critical (before launch) → High → Medium → Polish, each with its action (Change now / Confirm first). Each fix: page, device, exactly where, a screenshot,
    "Now" (exact current text/state) → "Change to" (exact replacement).
 4. **Copy fixes** — small wording fixes as Now → Change to rows.
 5. **Copy & conversion review** — one card per point: what we see (quoted), recommendation (with example wording),

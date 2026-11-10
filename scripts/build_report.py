@@ -273,7 +273,7 @@ def build_html(d, base_dir):
     A("</div></section>")
 
     # fixes
-    A('<section aria-labelledby="fixes"><h2 id="fixes">Fix list</h2><div class="legend"><span class="chip c-crit">Critical · before ads</span>'
+    A('<section aria-labelledby="fixes"><h2 id="fixes">Fix list</h2><div class="legend"><span class="chip c-crit">Critical · before launch</span>'
       '<span class="chip c-high">High</span><span class="chip c-med">Medium</span><span class="chip c-pol">Polish</span></div><div class="fixes">')
     for f in fixes:
         cls, chip, label = SEV[f["severity"]]

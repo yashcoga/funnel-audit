@@ -1,7 +1,8 @@
 # Funnel Audit — Claude Code skill
 
-Give Claude the first page of a funnel and get back a full pre-launch audit: everything to fix before ads go live,
-with screenshots showing exactly where.
+Give Claude the first page of a funnel and get back a full pre-launch audit: everything to fix before the funnel goes live
+(flow, copy and design), with screenshots showing exactly where. One run covers what the separate design review
+(page-design-review) checks, so you don't need to run both.
 
 Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 
@@ -13,10 +14,13 @@ Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 - **Copy & conversion:** spelling, wrong or past dates, text that differs between desktop and mobile, product names
   and prices that don't match across pages, claims and urgency that need to be true, and a conversion review of every
   page (headline, offer, proof, CTAs, objections, form, thank-you next steps).
+- **Design:** every page on desktop and mobile: form/CTA on the first screen, headline length, one word alone on a
+  last line, button text wrapping, small text, blurry images, spacing and alignment, form polish, host photo,
+  proof layout, and consistency with the client's design system. Small design items are grouped into one fix per page.
 - **Tracking:** which Meta / Google / TikTok events fire on each step, with value and currency, and duplicates.
 - **Page speed:** Google PageSpeed scores (pagespeed.web.dev) for mobile and desktop, plus the exact images and
   scripts slowing each page down.
-- **Basics before ads:** privacy policy, SMS consent, refund text, old pages still published.
+- **Basics before launch:** privacy policy, SMS consent, refund text, old pages still published.
 - **Legal pages in the footer:** every Terms / Privacy / Refund / Disclaimer / Support page the funnel links to is
   opened and checked: does it exist, is *this* funnel's paid offer named in the Terms / Refund page (pages shared
   with the main offer funnel are fine), brand name and contact details, "last updated" date, SMS carrier wording, and the clauses each page
@@ -35,7 +39,7 @@ Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 - **Watch it live:** every check runs in a visible Chrome window, so you can see what Claude is clicking.
 
 **What you get:** one clickable **HTML report** saved in your folder (screenshots included, works offline, easy to
-share): verdict, funnel map, ranked fix list (Critical → Medium) in "Now → Change to" format with **marked-up
+share): verdict, funnel map, ranked fix list (Critical → High → Medium → Polish, each marked Change now / Confirm first) in "Now → Change to" format with **marked-up
 screenshots**, copy fixes, copy & conversion review, tracking, dates from custom values, legal pages, page speed, and a test-purchase SOP listing the test
 records to clean up.
 

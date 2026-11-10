@@ -112,6 +112,19 @@
    "chip": "High · decide",
    "title": "Example with a custom chip label",
    "body": "…"
+  },
+  {
+   "id": "P1",
+   "severity": "polish",
+   "chip": "Polish · Change now",
+   "title": "Polish on /optin: 3 small design fixes",
+   "where": "/optin · desktop + mobile",
+   "body": "Design review (step 4a): Polish items are grouped into one fix per page.",
+   "bullets": [
+    "Mobile, headline: “IT.” sits alone on the last line. Add text-wrap: balance to the headline.",
+    "Desktop, testimonials: the three cards are different heights. Give the cards the same height.",
+    "Mobile, form: the button text wraps to 2 lines. Shorten it to “Watch the free breakdown”."
+   ]
   }
  ],
  "copy_fixes": [
