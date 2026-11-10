@@ -18,8 +18,8 @@ Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
   scripts slowing each page down.
 - **Basics before ads:** privacy policy, SMS consent, refund text, old pages still published.
 - **Legal pages in the footer:** every Terms / Privacy / Refund / Disclaimer / Support page the funnel links to is
-  opened and checked: does it exist, does it describe *this* funnel's offers and prices (no leftovers from another
-  offer), brand name and contact details, "last updated" date, SMS carrier wording, and the clauses each page
+  opened and checked: does it exist, is *this* funnel's paid offer named in the Terms / Refund page (pages shared
+  with the main offer funnel are fine), brand name and contact details, "last updated" date, SMS carrier wording, and the clauses each page
   usually needs (flagged as "check with your lawyer", not legal advice).
 - **Dates from GoHighLevel custom values:** every date and time must come from the custom values, not typed-in
   text, so the next class only needs the values changed. Claude swaps in a test date to prove it, and lists fixed
@@ -28,8 +28,8 @@ Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
   and new opt-in (address, GHL funnel/step, form, form redirect, fields, Meta/Google/TikTok pixels) and says
   whether switching would break them, with the safe way to switch and a checklist for GHL workflows.
 - **Right pages, right tags:** every link is followed to the page it opens and checked against the funnel's own step list
-  (catches "No thanks" links that go to an old page), and every page's SEO title, description, share image and
-  noindex are checked.
+  (catches "No thanks" links that go to an old page), and every page's SEO title, description and share image
+  are checked.
 - **Custom values:** dates, weekday, time and the "Add to My Calendar" link must come from `masterclass_date`,
   `masterclass_day`, `masterclass_time` and `masterclass_addevent`, checked on the live pages and in the GHL paste files.
 - **Watch it live:** every check runs in a visible Chrome window, so you can see what Claude is clicking.

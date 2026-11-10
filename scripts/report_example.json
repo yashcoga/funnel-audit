@@ -11,11 +11,14 @@
  "sheet_url": "https://docs.google.com/spreadsheets/d/EXAMPLE",
  "verdict": {
   "status": "not_ready",
-  "headline": "Not ready for heavy ad spend yet.",
-  "intro": "The flow works. These need fixing before the budget goes up:",
+  "headline": "Not ready to launch yet: 2 fixes first.",
+  "intro": "The flow works. These need fixing before the funnel goes live:",
   "blockers": [
    "The thank-you page shows last week’s date.",
    "No privacy policy link."
+  ],
+  "highlights": [
+   "No Meta, Google or TikTok pixel yet. Expected at this stage: the ads/tech team adds tracking later. Not a launch blocker."
   ],
   "working": [
    "All CTAs scroll to the form.",
@@ -181,17 +184,32 @@
     "terms"
    ]
   },
+  "offers": [
+   {
+    "offer": "Webinar Replay Bundle",
+    "named_on": ["/terms", "/refund-policy"],
+    "status": "ok",
+    "status_text": "Named",
+    "action": ""
+   },
+   {
+    "offer": "Done-For-You Templates",
+    "named_on": [],
+    "status": "fail",
+    "status_text": "Not named",
+    "action": "Add “Done-For-You Templates” to /terms and /refund-policy: what it is, the price, how buyers get it and the refund rule for it."
+   }
+  ],
   "rows": [
    {
     "page": "/terms",
     "name": "Terms of Service",
-    "status": "fail",
-    "status_text": "Fix",
+    "status": "warn",
+    "status_text": "Check",
     "findings": [
-     "Price $49 appears nowhere in the funnel: “an optional VIP upgrade for $49”",
      "No page title"
     ],
-    "action": "Replace the VIP paragraph with the real offer: “...”"
+    "action": "Add the title “Terms of Service | Example Brand”."
    },
    {
     "page": "/privacy-policy",

@@ -20,6 +20,15 @@ The verdict and the Critical tier are about **launch**, not ads. These are repor
   Most new funnels launch without sales tracking; the team shares this with the ads/tech people later. Report it in
   the Tracking section and as one fix with severity `high` and chip `"Highlight · not a launch blocker"`, worded so
   it can be forwarded as is. Never list it under the verdict's blockers.
+  **Audits run before tracking is set up (user rule, 2026-11-10).** So the verdict headline, intro and blocker list
+  never say "ready / not ready for ads", "ad spend" or "budget", and never mention pixels, Google tag or TikTok.
+  Write the headline about launch only ("Not ready to launch yet: N fixes first." / "Ready to launch with a few
+  fixes."). Missing tracking goes only in `verdict.highlights` (one neutral line, e.g. "No Meta, Google or TikTok
+  pixel yet. Expected at this stage: the ads/tech team adds it later."), in the Tracking section and in its one
+  highlight fix. **Re-audits too:** "N of M fixes done" counts and "still open" lists leave the tracking fix out, and
+  "still no pixel" is never a reason the funnel isn't ready. `build_report.py` stops with an error if the verdict
+  breaks this. The one exception is step 2b: a new opt-in that loses the Meta pixel the *running* ads use is a
+  switch-over blocker (that's about not breaking live ads, not about setting up tracking).
 - **Urgency that a later page contradicts** (e.g. the downsell says "not offered again", then the thank-you page
   re-offers it). Severity `medium`, chip `"Highlight · not a launch blocker"`, with the recommended wording.
 - **Buyer confirmation page with no download / access button** that tells buyers to check their email. That's the
@@ -211,10 +220,12 @@ python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, wher
   redirect, High otherwise. Also look at the screenshot of every destination: same design and same offer as the
   rest of the funnel? Never report a link as fixed until you've opened the page it lands on.
 - **SEO / share meta tags:** per step — title, meta description, og:title / og:description / og:image, canonical,
-  favicon, noindex. Copied titles/descriptions (e.g. the opt-in's title on the upsell), no share image,
-  auto-generated slugs (`/optin-page-1109`) and indexable offer/thank-you pages go in the fix list (High for the
+  favicon. Copied titles/descriptions (e.g. the opt-in's title on the upsell), no share image and
+  auto-generated slugs (`/optin-page-1109`) go in the fix list (High for the
   opt-in's own tags and for copied titles; Medium for the rest), with exact replacement text for every title and
   description. Report the table in the `funnel_steps` section.
+  **Never report noindex / "can be indexed by Google"** on any page, not as a fix, row or note (user rule,
+  2026-11-10: not needed). The fix list carries only pointers that matter for launch and conversion.
 
 ### 2b. Switch-over from the live funnel (whenever ads or automations run on an old funnel)
 
@@ -239,25 +250,32 @@ CHECK with the fix. It writes `W/switch-over.json`; copy its `switch_over` block
 
 ### 3. Legal pages in the footer (always, every funnel)
 
-`python "$S/check_legal_pages.py" --scans W/scans --out W` — run it after the funnel pages are scanned and before
+`python "$S/check_legal_pages.py" --scans W/scans --out W --offers "<upsell name>" "<downsell name>"` — pass the
+exact name of every paid offer in this funnel (upsell, downsell, order bump), as the offer pages and checkout write
+them. Run it after the funnel pages are scanned and before
 `check_links.py` / `copy_review.py`. It finds every legal/policy link on every funnel page (Terms, Privacy, Refund,
 Disclaimer, Cookies, Support, Contact), scans each one into `W/scans` (desktop + mobile screenshots, so the link and
 copy checks include them), and writes `W/legal.json` with:
 
 - **Footer matrix:** which legal links each funnel page shows. Every page needs at least Privacy + Terms; checkout
   pages also need Refund. A missing link is High (Critical on the opt-in).
+- **This funnel's offer in the legal pages (the most important legal check, user rule 2026-11-10):** each paid
+  offer from `--offers` must be named in the Terms or Refund page the funnel links to. Not named = **High** fix:
+  "Add “<offer>” to /terms and /refund-policy: what it is, the price, how buyers get it and the refund rule."
+  Shown in the report as its own table ("Is this funnel's offer in the legal pages?").
+- **Shared legal pages are fine.** Funnels usually link to the legal pages of the client's main offer funnel. That is
+  the setup we want, never a fix: don't flag that the pages "belong to another funnel", or that they name other
+  offers, prices or funnel names. Only ask: is *this* funnel's offer in them?
 - **Per page:** HTTP status / redirect (a "legal" link that lands on `/` or a 404 is Critical), page title, length
-  (stub pages), "Last updated" date (missing / in the future), placeholder text, prices and offer words that appear
-  nowhere in the funnel (leftovers from another client or offer, e.g. a "$49 VIP tier" on a funnel selling a $27
-  bundle), brand-name casing, company name and support email vs the funnel, justified text on phones, and the clauses
+  (stub pages), "Last updated" date (missing / in the future), placeholder text, brand-name casing, company name and support email vs the funnel, justified text on phones, and the clauses
   each page type normally needs (Privacy: SMS carrier wording, cookies & pixels, rights; Terms: liability, governing
   law, results disclaimer, "not financial advice" in finance niches; Refund: a clear rule for what this funnel sells
   and how to ask; Support: a way to reach a person and a response time).
 
 Then **read every legal page yourself** (the `-desktop-part-N.png` / `-mobile-part-N.png` screenshots and the text in
 `copy-review.md`):
-- Does it describe **this** funnel's offers, prices, product names and checkout? Quote every sentence that doesn't.
-  Leftovers from a template or an earlier offer are the most common legal-page problem.
+- Is **this** funnel's paid offer covered: named, and its refund rule clear? Confirm the script's "Not named" rows
+  by reading the page (the name may be written differently). Text about other offers is fine; don't quote it as a problem.
 - Do the Privacy page's SMS section and the opt-in form's consent checkbox agree, and does the checkbox text carry
   the carrier wording (STOP / HELP, message frequency, "message and data rates may apply", consent not a condition
   of purchase) plus a link to the Privacy Policy and Terms? Carriers reject A2P 10DLC texting campaigns without these.
@@ -401,7 +419,8 @@ anything looks wrong. Add `--pdf` only if the user asks for a PDF.
 Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
 
 1. **Verdict** — ready to launch or not, the launch blockers, and what works. Highlights (pixels, contradicted
-   urgency) go in a separate line under the verdict, never in the blocker list.
+   urgency) go in `verdict.highlights` (shown as a separate line under the verdict), never in the headline or the
+   blocker list. Never "ready for ads" wording (see "Launch blockers vs highlights").
 1. **Root domain** — every address tested, where it lands, result and what to do, with screenshots (build_report.py:
    the `root_domain` section, straight from `root-domain.json`).
 1a. **Funnel steps & SEO** — every step with its title/description/share-image issues and every link that lands
@@ -429,7 +448,7 @@ Write for the person running the audit: plain language, short sentences, no deve
 
 ### 8. Final message
 
-A short summary: the verdict in one line, the top 3–5 fixes, the report's file link, test records to clean up,
+A short summary: the verdict in one line (about launch, never "ready for ads"), the top 3–5 fixes (tracking is not one of them), the report's file link, test records to clean up,
 and anything that needs the user (e.g. a decision). Don't repeat the whole report.
 
 ## Manual fallback (only when a script can't do it)
@@ -471,9 +490,9 @@ URL, payment ID and pixel events. If the Playwright MCP isn't installed, the use
   as +91…/+44…). US visitors get +1; mention it only as a regional artefact.
 - **GHL evergreen countdowns** restart for every new visitor and quietly disappear at zero while the offer stays.
   Check by opening the page in a fresh browser context and again after it expires.
-- **Legal pages are often copied from another funnel.** Look for prices, tiers ("VIP", "General Admission"),
-  "ticket" wording or product names that this funnel doesn't sell, and for the brand written in a different case.
-  `check_legal_pages.py` flags these; confirm by reading the page.
+- **Legal pages usually belong to the main offer funnel, and that's fine.** In the Coach K re-audit the footer
+  linked to the Grant Masterclass funnel's legal pages and the audit wrongly flagged it (H2). The real question is
+  whether this funnel's paid offers are named there (`--offers`).
 - **Pop-up checkouts:** some upsell pages only load the Whop checkout after the "Yes" click and hide Whop's pay
   button (`data-whop-checkout-hide-submit-button`), paying from a button on the page instead. `whop_checkout.py`
   handles both. Whop adds an estimated tax line based on the tester's location (e.g. 18% from India), so a total

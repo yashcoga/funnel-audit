@@ -2,7 +2,7 @@
 Disclaimer, Customer Support, Contact ...).
 
 Usage:
-  python check_legal_pages.py --scans DIR [--out DIR] [--urls URL [URL ...]]
+  python check_legal_pages.py --scans DIR [--out DIR] [--offers "Product A" "Product B"] [--urls URL [URL ...]]
 
 Run it after the funnel pages are scanned (scan_page.py) and BEFORE check_links.py / copy_review.py: it scans every
 legal page it finds into the same DIR (desktop + mobile screenshots), so those scripts include them too.
@@ -10,9 +10,11 @@ legal page it finds into the same DIR (desktop + mobile screenshots), so those s
 What it does:
   1. Footer matrix: which legal links each funnel page shows (every page needs at least Privacy + Terms).
   2. Funnel facts: prices, emails, company name and the brand names used on the funnel pages.
-  3. Per legal page: HTTP status / redirect, page title, length, "last updated" date, placeholders, prices or offer
-     words that appear nowhere in the funnel (leftovers from another offer), brand-name casing, company name and
-     support email consistency, justified text on phones, and the clauses each page type normally needs
+  3. Offer coverage (--offers): every paid offer this funnel sells (upsell, downsell, order bump) must be named in
+     the Terms or Refund page it links to. Not named = High fix. Legal pages shared with the client's main offer
+     funnel are FINE (user rule, 2026-11-10): other offers, prices or funnel names on them are never flagged.
+  4. Per legal page: HTTP status / redirect, page title, length, "last updated" date, placeholders, brand-name
+     casing, company name and support email consistency, justified text on phones, and the clauses each page type normally needs
      (Privacy: SMS/A2P wording, cookies & pixels, rights; Terms: liability, governing law, results disclaimer;
      Refund: the policy for what this funnel sells and how to ask; Support: a way to reach a person).
 Missing clauses are "check with the client / their lawyer" items, not legal advice.
@@ -48,10 +50,6 @@ EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 COMPANY_RE = re.compile(r"\b((?:[A-Z][\w&'.-]*\s){1,6}(?:LLC|L\.L\.C\.|Inc\.?|Ltd\.?|Limited|Corp\.?|Corporation|Co\.|LLP|PLLC|GmbH))")
 PLACEHOLDER_RE = re.compile(r"\[(?:company|business|your|name|date|email|address|website|state|insert)[^\]]{0,40}\]|\{\{[^}]{1,60}\}\}|lorem ipsum|"
                             r"\byour company\b|\bcompany name\b|example\.com|\binsert (?:here|name|date)\b|\bXXX+\b|\bTBD\b", re.I)
-OFFER_WORDS = ["VIP", "Platinum", "Gold tier", "General Admission", "ticket", "upgrade tier", "summit", "workshop",
-               "bootcamp", "retreat", "membership", "subscription", "coaching program", "mastermind", "course", "webinar",
-               "challenge", "certification", "free trial", "monthly fee", "monthly payment"]
-MONEY_NEAR = re.compile(r"purchas|payment|\bpay\b|price|checkout|order|\$", re.I)
 UPDATED_RE = re.compile(r"(last\s+updated|last\s+revised|effective(?:\s+date)?|updated\s+on)\s*[:\-]?\s*([^\n]{0,40})", re.I)
 FULL_DATE_RE = re.compile(rf"{MONTHS}\.?\s+(\d{{1,2}})(?!\d)(?:st|nd|rd|th)?,?\s+(\d{{4}})|(\d{{1,2}})/(\d{{1,2}})/(\d{{2,4}})", re.I)
 
@@ -155,11 +153,19 @@ def brand_names(funnel_text):
     return sorted(keep, key=lambda c: (-counts[c], len(c)))[:40]
 
 
+def flat(t):
+    """Lower-case, drop trademark signs and punctuation, single spaces: for matching product names."""
+    t = re.sub("[™®©]", "", t or "").replace("’", "'").replace("&", " and ")
+    return " " + " ".join(re.findall(r"[a-z0-9$']+", t.lower())) + " "
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scans", required=True, help="folder with the scan_page.py JSON of the funnel pages")
     ap.add_argument("--out", default=None)
     ap.add_argument("--urls", nargs="*", default=[], help="extra legal page URLs to check")
+    ap.add_argument("--offers", nargs="*", default=[],
+                    help="exact names of the funnel's paid offers (upsell, downsell, order bump), as the offer pages / checkout write them")
     ap.add_argument("--no-scan", action="store_true", help="don't run scan_page.py on the legal pages")
     a = ap.parse_args()
     out = a.out or a.scans
@@ -213,7 +219,7 @@ def main():
 
     # 2. visit each legal page
     today = datetime.date.today()
-    pages = []
+    pages, texts = [], {}
     with sync_playwright() as p:
         browser = launch(p)
         for u, meta in sorted(legal.items(), key=lambda kv: [k for k, _ in KINDS].index(kv[1]["kind"]) if kv[1]["kind"] in dict(KINDS) else 99):
@@ -257,21 +263,7 @@ def main():
                             add("high", f"“Last updated” date is in the future: {m.group(0).strip()}")
                     elif meta["kind"] in ("privacy", "terms"):
                         add("polish", f"Date is month-only (“{m.group(0).strip()}”); a full date is clearer")
-                # leftovers from other offers
-                for pr in sorted(set(x.replace(" ", "") for x in PRICE_RE.findall(text))):
-                    if facts["prices"] and pr not in facts["prices"]:
-                        ctx_m = re.search(r"[^.\n]{0,90}" + re.escape(pr) + r"[^.\n]{0,60}", text)
-                        add("high", f"Price {pr} appears nowhere in the funnel (leftover from another offer?): "
-                                    f"“{(ctx_m.group(0) if ctx_m else pr).strip()}”")
-                for w in OFFER_WORDS:
-                    rx = re.compile(r"\b" + re.escape(w) + r"s?\b", re.I if w.islower() else 0)
-                    if rx.search(text) and not rx.search(ftext):
-                        ctx_m = re.search(r"[^.\n]{0,80}\b" + re.escape(w) + r"[^.\n]{0,60}", text, 0 if not w.islower() else re.I)
-                        snippet = (ctx_m.group(0) if ctx_m else w).strip()
-                        sold = bool(MONEY_NEAR.search(snippet))
-                        add("high" if sold else "medium",
-                            f"Mentions “{w}”{' as something you pay for' if sold else ''}, but nothing in this funnel is "
-                            f"called that{'' if sold else ' (fine if it is a related offer named on purpose)'}: “{snippet}”")
+                # Other offers / prices / funnel names on a shared legal page are fine: never flagged (2026-11-10).
                 seen_bad = set()
                 for b in facts["brands"]:
                     for hit in set(re.findall(r"\b" + re.escape(b) + r"\b", text, re.I)):
@@ -298,6 +290,7 @@ def main():
                         add("high", "SMS section is missing carrier-required wording: " + "; ".join(sms_missing))
                 if mb.get("justified"):
                     add("medium", f"Justified text on phones ({mb['justified']} blocks): uneven word gaps; use left-aligned text")
+            texts[u] = text
             pages.append({"url": u, "path": path, "kind": meta["kind"], "name": meta["name"], "linked_from": meta["linked_from"],
                           "status": dk.get("status"), "final_url": dk.get("final_url"), "title": dk.get("title"),
                           "words": len(re.findall(r"\w+", text)), "findings": F})
@@ -317,9 +310,21 @@ def main():
         rows.append({"page": pg["path"], "name": pg["name"], "status": "fail" if worst <= 1 else "warn" if worst <= 3 else "ok",
                      "status_text": {0: "Missing", 1: "Fix", 2: "Check", 3: "Polish"}.get(worst, "OK"),
                      "findings": [f["text"] for f in sorted(pg["findings"], key=lambda f: rank[f["severity"]])], "action": ""})
-    res = {"funnel_facts": facts, "footer_matrix": matrix, "footer_issues": footer_issues, "pages": pages,
-           "report_block": {"intro": "Every legal page linked from the funnel footer, checked against what this funnel sells.",
-                            "matrix": matrix, "rows": rows}}
+    # offer coverage: is each paid offer of THIS funnel named in the Terms or Refund page it links to?
+    cover = [pg for pg in pages if pg["kind"] in ("terms", "refund") and texts.get(pg["url"])]
+    where = " and ".join(pg["path"] for pg in cover)
+    offers = []
+    for name in [o.strip() for o in a.offers if o.strip()]:
+        hits = [pg["path"] for pg in cover if flat(name) in flat(texts[pg["url"]])]
+        offers.append({"offer": name, "named_on": hits, "status": "ok" if hits else "fail",
+                       "status_text": "Named" if hits else "Not named",
+                       "action": "" if hits else
+                       (f"Add “{name}” to {where}: what it is, the price, how buyers get it and the refund rule for it."
+                        if cover else f"No Terms or Refund page is linked, so “{name}” isn't covered anywhere.")})
+    res = {"funnel_facts": facts, "footer_matrix": matrix, "footer_issues": footer_issues, "pages": pages, "offers": offers,
+           "report_block": {"intro": "Every legal page linked from the funnel footer, checked against what this funnel sells. "
+                                     "Legal pages shared with the main offer funnel are fine.",
+                            "matrix": matrix, "offers": offers, "rows": rows}}
     path = write_json(os.path.join(out, "legal.json"), res)
 
     print("Funnel facts:", {k: v for k, v in facts.items() if k != "brands"})
@@ -335,6 +340,11 @@ def main():
             print(f"   [{f['severity']}] {f['text']}")
         if not pg["findings"]:
             print("   OK")
+    print("\nThis funnel's paid offers in the Terms / Refund pages:")
+    if not a.offers:
+        print('   NOT CHECKED: re-run with --offers "<upsell name>" "<downsell name>" (names as the offer pages write them)')
+    for o in offers:
+        print(f"   {o['status_text']:9s} {o['offer']}" + (f"  ({', '.join(o['named_on'])})" if o["named_on"] else f"  -> {o['action']}"))
     print("->", path)
 
 

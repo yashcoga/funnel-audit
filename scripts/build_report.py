@@ -40,7 +40,7 @@ EXTRA_CSS = """
 .cc-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline}
 .cc-head .pg{font-size:13px;color:var(--muted)}
 .cc .see{font-size:15px}.cc .rec{font-size:15px;background:var(--to);border-radius:6px;padding:8px 10px}
-.cc p,.verdict p,.fix p{max-width:none}
+.cc p,.verdict p,.fix p,p.hl{max-width:none}
 @media print{.cc{break-inside:avoid}}
 """
 
@@ -181,6 +181,8 @@ def build_html(d, base_dir):
     if v.get("blockers"):
         A("<ol>" + "".join(f"<li>{L(x)}</li>" for x in v["blockers"]) + "</ol>")
     A("</div>")
+    if v.get("highlights"):
+        A('<p class="note hl"><strong>Highlights (not launch blockers):</strong> ' + " ".join(L(x) for x in v["highlights"]) + "</p>")
     if v.get("working"):
         A('<div class="good"><h3>Working correctly</h3><ul>' + "".join(f"<li>{L(x)}</li>" for x in v["working"]) + "</ul></div>")
     A("</section>")
@@ -353,6 +355,14 @@ def build_html(d, base_dir):
                 A(f"<tr><td>{L(pg)}</td>" + "".join(f'<td class="{"pass" if k in ks else "fail"}">{"✓" if k in ks else "✗"}</td>'
                                                    for k in kinds) + "</tr>")
             A("</tbody></table></div>")
+        if lg.get("offers"):
+            A("<h3>Is this funnel's offer in the legal pages?</h3>")
+            A('<div class="tbl"><table><thead><tr><th>Paid offer</th><th>Result</th><th>Named on</th><th>What to do</th></tr></thead><tbody>')
+            for o in lg["offers"]:
+                A(f'<tr><td>{L(o["offer"])}</td><td class="{STATUS.get(o.get("status"), "")}" style="white-space:nowrap">'
+                  f'{L(o.get("status_text", ""))}</td><td>{L(", ".join(o.get("named_on") or []) or "Nowhere")}</td>'
+                  f'<td>{L(o.get("action") or "None")}</td></tr>')
+            A("</tbody></table></div>")
         A('<div class="tbl"><table><thead><tr><th>Legal page</th><th>Result</th><th>What we found</th><th>What to do</th></tr></thead><tbody>')
         for r in lg.get("rows", []):
             found = "".join(f"<li>{L(x)}</li>" for x in r.get("findings", []))
@@ -409,6 +419,28 @@ def build_html(d, base_dir):
     return "\n".join(h)
 
 
+ADS_WORDING = re.compile(r"ready (for|to run) ads|for ads\b|ad spend|ads? budget|before (the )?budget|before ads", re.I)
+TRACKING_WORDS = re.compile(r"pixel|google tag|gtag|tiktok|tracking|purchase event|lead event", re.I)
+
+
+def check_verdict(d):
+    """The verdict is about launch, not ads (SKILL.md "Launch blockers vs highlights"). Audits run before the
+    pixels are set up, so missing tracking must never make the verdict say "not ready for ads"."""
+    v = d.get("verdict", {})
+    top = " ".join(str(v.get(k, "")) for k in ("headline", "intro"))
+    if ADS_WORDING.search(top):
+        sys.exit("STOP: the verdict headline/intro talks about ads readiness (\"" + ADS_WORDING.search(top).group(0)
+                 + "\"). The verdict is about launch only. Reword it, e.g. \"Not ready to launch yet: N fixes first.\"")
+    if TRACKING_WORDS.search(top):
+        sys.exit("STOP: the verdict headline/intro mentions pixels/tracking. Missing tracking is a highlight, never "
+                 "part of the verdict. Move it to verdict.highlights.")
+    if not d.get("switch_over"):  # a pixel lost when replacing a live funnel (step 2b) is a real blocker
+        bad = [b for b in v.get("blockers", []) if TRACKING_WORDS.search(str(b))]
+        if bad:
+            sys.exit("STOP: these verdict blockers are about pixels/tracking, which is never a launch blocker. "
+                     "Move them to verdict.highlights:\n  - " + "\n  - ".join(map(str, bad)))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("findings")
@@ -417,6 +449,7 @@ def main():
     ap.add_argument("--pdf", action="store_true", help="also write a PDF")
     a = ap.parse_args()
     d = read_json(a.findings)
+    check_verdict(d)
     base_dir = os.path.dirname(os.path.abspath(a.findings))
     name = d.get("file_name") or f"{d['funnel_name']} - Funnel Audit"
     os.makedirs(a.out, exist_ok=True)

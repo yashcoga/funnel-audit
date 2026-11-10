@@ -12,9 +12,9 @@ start page, opens every step (pixels blocked) and checks:
      that is NOT a step of this funnel, e.g. an old upsell from the previous funnel with the old design. "It
      navigates" is not enough: the destination must be the right page of this funnel.
   3. SEO / share meta tags per step: title, meta description, og:title / og:description / og:image, canonical,
-     favicon, noindex. Flags missing tags, titles or descriptions copied across steps, titles that describe a
-     different page (e.g. the opt-in title on an upsell), auto-generated slugs (optin-page-1109,
-     upsell-page-3387-1294), and offer / thank-you pages that are indexable by Google.
+     favicon. Flags missing tags, titles or descriptions copied across steps, titles that describe a
+     different page (e.g. the opt-in title on an upsell) and auto-generated slugs (optin-page-1109,
+     upsell-page-3387-1294). noindex is NOT checked (user rule, 2026-11-10: not worth a fix).
 
 Writes DIR/funnel-steps.json with a ready "funnel_steps" block for findings.json.
 """
@@ -158,8 +158,6 @@ def main():
                     issues.append("no share image (og:image): links shared on Facebook/WhatsApp show no picture")
                 if not s["og_title"]:
                     issues.append("no og:title")
-                if s["kind"] in ("upsell", "downsell", "thank-you") and "noindex" not in (s["robots"] or "").lower():
-                    issues.append("offer/thank-you page can be indexed by Google: add noindex")
                 if s["title"] and len(s["title"]) > 65:
                     issues.append(f"title is {len(s['title'])} characters (Google shows about 60)")
                 if s["description"] and not (70 <= len(s["description"]) <= 160):
