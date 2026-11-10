@@ -39,6 +39,28 @@ things like: **a root domain that shows an error (step 1a)**, a published page o
 checkout that can't complete or shows the wrong price/product, wrong dates/times/links for the next live session,
 broken elements every visitor sees, and legal/consent text that is wrong for what the funnel sells.
 
+## Fix buckets (same in funnel-audit and page-design-review, user rule 2026-11-10)
+
+Every fix gets two labels, written together like **"Critical · Confirm first"**:
+
+1. **Tier, how serious it is:**
+   - **Critical**: stops a launch, a sale or a sign-up, or shows visitors something wrong. Examples: a broken
+     button, form or checkout; a wrong price, date or link; a checkout that is live before the offer opens; a page
+     that loses sign-ups; legally wrong text. Fix before launch.
+   - **High**: the page works but clearly loses conversions or trust. Examples: no proof on a sales page, the
+     CTA/form far below the first screen, the host missing from the page, hard-to-read text, a step with nothing
+     to click.
+   - **Medium**: consistency and clarity. Examples: names, times or footers that differ between pages, a missing
+     ™, uneven card layouts.
+   - **Polish**: small visual details. Examples: lone words, spacing, glow lines, stray characters.
+2. **Action, can we do it now:** **Change now** (ready to apply) or **Confirm first** (needs a decision, a fact
+   or an asset).
+
+Summary tables list fixes Critical → High → Medium → Polish; the numbers on the screenshots stay tied to their
+position on the page. Funnel audit only: tracking/pixel items keep the chip "Highlight · not a launch blocker" and
+OK-as-is notes keep "Note · OK as is".
+In the report JSON: `severity` is the tier (`critical`/`high`/`medium`/`polish`) and `chip` is "<Tier> · Change now" or "<Tier> · Confirm first" for every fix.
+
 The user gives a **starting page** (usually the opt-in). Everything else is discovered by walking the funnel.
 Inputs:
 - **Coupon code** (100% off) for the paid steps. **Always ask for it at the start of the run** if it wasn't given
@@ -428,7 +450,7 @@ Report content, in this order (the builder handles layout, index, links and "Bac
 1b. **Switch-over from the live funnel** (when one exists) — old vs new table and the GHL checklist
    (build_report.py: the `switch_over` section, straight from `switch-over.json`).
 2. **Funnel map** — each page, what every CTA/link does, where each path ends (✓ / ✗).
-3. **Fix list** — ranked Critical (before launch) → High → Medium. Each fix: page, device, exactly where, a screenshot,
+3. **Fix list** — ranked Critical (before launch) → High → Medium → Polish, each with its action (Change now / Confirm first). Each fix: page, device, exactly where, a screenshot,
    "Now" (exact current text/state) → "Change to" (exact replacement).
 4. **Copy fixes** — small wording fixes as Now → Change to rows.
 5. **Copy & conversion review** — one card per point: what we see (quoted), recommendation (with example wording),
