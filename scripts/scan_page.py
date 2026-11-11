@@ -1,7 +1,9 @@
 """Scan one funnel page on desktop and/or mobile and write everything an audit needs to JSON + screenshots.
 
 Usage:
-  python scan_page.py URL --out DIR [--device desktop|mobile|both] [--allow-tracking] [--no-images]
+  python scan_page.py URL [URL ...] --out DIR [--device desktop|mobile|both] [--allow-tracking] [--no-images] [--jobs 4]
+
+Several URLs are scanned at the same time (one process per page, --jobs at once). Image sizes are fetched in parallel.
 
 Writes, per device:
   DIR/<page>-<device>.json         all data + automatic flags
@@ -19,7 +21,10 @@ Ad pixels are blocked by default (logged as "would have fired").
 import argparse
 import os
 import re
+import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 from playwright.sync_api import sync_playwright
 
@@ -251,16 +256,14 @@ def scan(browser, url, device, out, allow_tracking=False, weigh_images=True):
 
     # ---- image weights (largest first)
     if weigh_images:
-        seen = {}
+        srcs = sorted({i["src"] for i in data["images"] if i["src"] and not i["src"].startswith("data:")})
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            seen = dict(zip(srcs, ex.map(fetch_size, srcs)))
         for img in data["images"]:
-            src = img["src"]
-            if not src or src.startswith("data:"):
-                continue
-            if src not in seen:
-                seen[src] = fetch_size(src)
-            size, ctype, status = seen[src]
-            img["bytes"] = size
-            img["content_type"] = ctype
+            if img["src"] in seen:
+                size, ctype, status = seen[img["src"]]
+                img["bytes"] = size
+                img["content_type"] = ctype
     # ---- flags
     flags = []
     t = data["text"]
@@ -358,13 +361,35 @@ def scan(browser, url, device, out, allow_tracking=False, weigh_images=True):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("url")
+    ap.add_argument("urls", nargs="+", metavar="URL")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--jobs", type=int, default=4, help="pages scanned at the same time (default 4)")
     ap.add_argument("--device", default="both", choices=["desktop", "mobile", "both"])
     ap.add_argument("--allow-tracking", action="store_true", help="let ad pixels fire (default: blocked and logged)")
     ap.add_argument("--no-images", action="store_true", help="skip downloading images to measure their weight")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
+    if len(a.urls) > 1 and a.jobs > 1:
+        # one process per page (Playwright's sync API can't be shared across threads)
+        t0, running, queue = time.time(), [], list(a.urls)
+        extra = ["--device", a.device] + (["--allow-tracking"] if a.allow_tracking else []) + (["--no-images"] if a.no_images else [])
+        while queue or running:
+            while queue and len(running) < a.jobs:
+                u = queue.pop(0)
+                log = open(os.path.join(a.out, f"scan-{slug(u)}.log"), "w+", encoding="utf-8", errors="replace")
+                env = dict(os.environ, PYTHONIOENCODING="utf-8")
+                cmd = [sys.executable, os.path.abspath(__file__), u, "--out", a.out, "--jobs", "1"] + extra
+                running.append((subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env), log))
+            for pr, log in running[:]:
+                if pr.poll() is not None:
+                    log.seek(0)
+                    print(log.read(), end="", flush=True)
+                    log.close()
+                    running.remove((pr, log))
+            time.sleep(0.3)
+        print(f"\nDone: {len(a.urls)} pages in {time.time() - t0:.0f}s")
+        return
+    a.url = a.urls[0]
     devices = ["desktop", "mobile"] if a.device == "both" else [a.device]
     with sync_playwright() as p:
         browser = launch(p)

@@ -2,6 +2,7 @@
 
 Usage:
   python check_funnel_steps.py START_URL --out DIR [--ctas DIR/ctas]
+  python check_funnel_steps.py START_URL --list     # just print every step URL (seconds), to scan all pages at once
 
 GoHighLevel puts the funnel's full step list (every page path) in each page's data. This script reads it from the
 start page, opens every step (pixels blocked) and checks:
@@ -73,10 +74,14 @@ def kind_of(path, info):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("start_url")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out")
     ap.add_argument("--ctas", help="folder with test_ctas.py results (default: OUT/ctas)")
+    ap.add_argument("--list", action="store_true", help="only print the funnel's step URLs and stop")
     a = ap.parse_args()
-    os.makedirs(a.out, exist_ok=True)
+    if not a.list and not a.out:
+        ap.error("--out is required (unless --list)")
+    if a.out:
+        os.makedirs(a.out, exist_ok=True)
     base = urllib.parse.urlparse(a.start_url)
     origin = f"{base.scheme}://{base.netloc}"
     with sync_playwright() as p:
@@ -85,6 +90,12 @@ def main():
         page = ctx.new_page()
         prepare(page, a.start_url, wait_ms=3000, scroll=False)
         paths = page.evaluate(STEPS_JS)
+        if a.list:
+            print(f"{len(paths)} steps in this funnel (GHL step list; empty = not a GHL funnel, walk it by links):")
+            for path in paths:
+                print(origin + path)
+            browser.close()
+            return
         start_path = urllib.parse.urlparse(page.url).path.rstrip("/") or "/"
         first_final = None
         steps = []

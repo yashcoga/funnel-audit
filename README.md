@@ -4,6 +4,15 @@ Give Claude the first page of a funnel and get back a full pre-launch audit: eve
 (flow, copy and design), with screenshots showing exactly where. One run covers what the separate design review
 (page-design-review) checks, so you don't need to run both.
 
+**Two modes.** Both run every test below (every button clicked, test opt-in, free test purchases, page speed).
+- **Quick audit** ("quick funnel audit"): no screenshots in the report; each fix names the page, device and exact
+  spot. Fastest.
+- **Full audit** ("full funnel audit" / "deep audit"): the same, plus marked-up screenshots for every visible fix and a
+  by-eye design review of every section.
+
+Both are faster than before: all funnel pages are found up front (GHL step list) and scanned and click-tested at
+the same time, identical links are clicked once, and slow checks (page speed, legal pages) run in the background.
+
 Claude walks the whole funnel the way a buyer would, on desktop and on mobile:
 
 - **Root domain:** the bare domain (and its www and http versions) must open a real page. A 404 there is a launch

@@ -1,6 +1,6 @@
 ---
 name: funnel-audit
-description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review and a full design review (first screen, layout, spacing, type, form polish, images, proof, brand consistency) on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Use when the user says "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
+description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review and a full design review (first screen, layout, spacing, type, form polish, images, proof, brand consistency) on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Runs in two modes, quick (every test, no screenshots in the report) or full (with marked-up screenshots). Use when the user says "quick funnel audit", "quick audit", "full funnel audit", "deep audit", "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
 ---
 
 # Funnel audit
@@ -11,6 +11,40 @@ GoHighLevel, Whop, ClickFunnels or custom HTML. The question every audit answers
 what has to change first?* "Launch" means it can go live: people can register, buy and reach the right confirmation,
 and nothing on the pages is broken, lost or legally wrong. It does **not** mean "ready to run ads" — see
 "Launch blockers vs highlights" below.
+
+## Two modes: quick and full (user rule, 2026-11-11)
+
+Both modes run **every test**: root domain, every page of the funnel, every button and link clicked on desktop and
+mobile, the test opt-in on every form, the free test purchases, switch-over, funnel steps & SEO, legal pages, dates
+from custom values, copy & conversion, design, tracking and page speed. The only difference is screenshots.
+
+| | **Quick** ("quick funnel audit", "quick audit") | **Full** ("full funnel audit", "deep audit") |
+|---|---|---|
+| Screenshots | Taken by the scripts, but **not opened** (except to confirm one specific doubt) | Every part looked at |
+| Design review (4a) | From the scan's design flags and numbers only | Flags + section-by-section look at every page |
+| Step 6 marked screenshots | **Skipped** | One per visible fix |
+| Report | Same report, fixes **without screenshots**: page, device, exact place, Now → Change to | Same, with marked-up screenshots |
+
+If the user just says "audit this funnel", ask once with clickable options (Quick / Full) in the same first
+message as the coupon and live-funnel questions, and start step 0 and the step list while waiting.
+
+## Running fast (both modes, user rule 2026-11-11)
+
+Past audits took 40–60 minutes of active work; most of it was clicking, test purchases and checks running one after
+another, not screenshots. So:
+
+1. **Get every page first:** `python "$S/check_funnel_steps.py" <start URL> --list` prints the funnel's whole GHL step
+   list in seconds. Scan and click-test all of them in one go instead of page by page.
+2. **One call for all pages:** `scan_page.py` and `test_ctas.py` take several URLs and run up to 4 pages/devices at the
+   same time (`--jobs`). `test_ctas.py` clicks each link address once (copies get "same link as #N"), reloads only
+   when needed, and runs desktop and mobile in parallel.
+3. **Long checks in the background** (Bash `run_in_background`) as soon as their input exists, and keep working while
+   they run: `pagespeed.py` / `lighthouse.py` (once the pages are known), `check_root_domain.py` (at the start),
+   `check_legal_pages.py` and `check_dynamic_dates.py` (after the scans).
+4. **Test purchases:** dry run first, then submit; if a submit fails, read the script's diagnosis before retrying
+   (one retry, then the manual fallback). Don't loop.
+5. **Don't fix the skill mid-audit.** If a script misbehaves, work around it once, note it under "Not tested and
+   why" or in the final message, and offer the skill fix after the report is delivered.
 
 ## Launch blockers vs highlights (user rule, 2026-10-16)
 
@@ -114,6 +148,7 @@ When everything passes, and the user hasn't given a URL yet (or invoked the skil
 
 > **You're set up. To run a funnel audit, send:**
 > Audit this funnel: `<starting page URL, usually the opt-in>`
+> Mode: `quick` (every test, no screenshots) or `full` (with marked-up screenshots)
 > Coupon code: `<100%-off coupon code for the upsells/downsells>` (needed for test purchases)
 > Marketing sheet: `<Google Sheet link>` (optional — used to check dates and links)
 > If you have an earlier fix list, put it in this folder and I'll re-check it.
@@ -192,17 +227,22 @@ parked or is blank, even when it's sent as status 200.
 
 ### 2. Walk the funnel
 
-For each page, in order (start page first):
+Start with the step list (`check_funnel_steps.py <start URL> --list`), then scan and click-test every published
+step at once (start page first in the list):
 
 ```
-python "$S/scan_page.py"  URL --out W/scans            # desktop + mobile: data, flags, screenshots
-python "$S/test_ctas.py"  URL --out W/ctas             # every button/link, where it lands, desktop + mobile
+python "$S/scan_page.py"  URL1 URL2 ... --out W/scans  # desktop + mobile: data, flags, screenshots (4 pages at a time)
+python "$S/test_ctas.py"  URL1 URL2 ... --out W/ctas   # every button/link, where it lands, desktop + mobile (in parallel)
 ```
 
-- **Look at every screenshot part** the scan prints (`W/scans/<page>-desktop-part-N.png`, `-mobile-part-N.png`)
+Pages found later (form redirects, "No thanks" chains, legal pages) get the same two commands.
+Not a GHL funnel (empty step list)? Walk it by links as before, one batch per round of new pages.
+
+- **Full mode: look at every screenshot part** the scan prints (`W/scans/<page>-desktop-part-N.png`, `-mobile-part-N.png`)
   with the Read tool. The flags catch a lot (invisible text, duplicates, sideways scroll, oversized images, dates,
   missing privacy link, and the design flags used in step 4a), but only looking catches layout and design problems.
-  Note what you see per page as you go; step 4a turns it into fixes.
+  Note what you see per page as you go; step 4a turns it into fixes. **Quick mode:** don't open the parts; work
+  from the flags, the `design:` line and the JSON (open one part only to settle a specific doubt before reporting).
 - Read each `FLAG` line. `hidden_element_with_text` is usually the hidden twin of a mobile-only/desktop-only block
   (normal in GoHighLevel); report it only if it's a leftover (e.g. links to another business). Compare twins:
   copy_review.py lists every desktop/mobile wording difference.
@@ -420,7 +460,11 @@ are NOT repeated here: links and where they land (step 2), legal links in the fo
 invisible text and broken/oversized images (scan flags), wording, typos and proof *content* (step 4). This step is
 about how each page **looks and reads**. Only flag what a visitor would notice or what costs sign-ups or sales.
 
-**Start from the scan's `design` flags** (in `W/scans/<page>-<device>.json` → `flags`, and the `design:` line it
+**Quick mode:** report the confirmed-by-data design flags and the numbers (first button position, headline lines,
+fonts, image sizes) plus anything visible in the page text/JSON; skip the by-eye checklist below and say in "Not
+tested and why": "Design reviewed from automatic checks only (quick audit)."
+
+**Full mode: start from the scan's `design` flags** (in `W/scans/<page>-<device>.json` → `flags`, and the `design:` line it
 prints): `cta_below_first_screen`, `headline_too_long`, `lone_word_last_line`, `button_text_wraps`,
 `small_body_text`, `blurry_image`, `many_fonts`. Confirm each one on the screenshot before reporting it. Then go
 section by section through every page, desktop then mobile, with the checklist:
@@ -456,8 +500,7 @@ assets: ask for them as "Confirm first" and add the question to the client's ope
 the same tiers and actions. Critical, High and Medium design fixes each get their own entry and screenshot.
 **Polish design items are grouped: one fix per page** (e.g. "Polish on /upsell: 6 small design fixes"), each item
 a bullet with device, where, and the exact change; one screenshot showing the main spots is enough. Add 3–5 design
-"keep it" points (what already works and shouldn't be touched) to `verdict.working`. Typical: 10–15 extra minutes
-per page.
+"keep it" points (what already works and shouldn't be touched) to `verdict.working`.
 
 ### 5. Page speed
 
@@ -471,7 +514,10 @@ Report mobile + desktop scores, LCP, TBT, CLS, the real-visitor Core Web Vitals 
 blocking scripts (scan_page.py flags oversized images too). If testing from outside the US, mention regional
 artefacts (e.g. TikTok is blocked in India and its pixel times out locally).
 
-### 6. Marked-up screenshots (required for every visible fix)
+### 6. Marked-up screenshots (full mode only; required for every visible fix)
+
+**Quick mode: skip this step.** Each fix says the page, device and exactly where instead ("/upsell · mobile ·
+second button under the price box").
 
 Every fix that has to be *found* on a page gets a cropped screenshot with the spot boxed in red and a short label,
 so anyone can see what to change without hunting. Skip only invisible things (pixel events, meta tags, speed).
@@ -491,8 +537,8 @@ Write `W/findings.json` (every field is shown in `$S/report_example.json`), then
 `python "$S/build_report.py" W/findings.json --out "<project folder>"`
 
 It writes one self-contained, clickable HTML file (screenshots embedded) named `<Funnel Name> - Funnel Audit.html`,
-checks every jump link, and saves desktop and phone preview images. **Look at both previews**; fix and rebuild if
-anything looks wrong. Add `--pdf` only if the user asks for a PDF.
+checks every jump link, and saves desktop and phone preview images. **Full mode: look at both previews**; fix and
+rebuild if anything looks wrong. Quick mode: read the printed link check only. Add `--pdf` only if the user asks for a PDF.
 
 Report content, in this order (the builder handles layout, index, links and "Back to all fixes"):
 
