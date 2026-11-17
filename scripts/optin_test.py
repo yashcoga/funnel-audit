@@ -13,7 +13,8 @@ Without --submit (default) nothing is sent: the form-submit request and ad pixel
 Steps:
   1. submit empty            -> validation messages
   2. bad email + short phone -> validation messages
-  3. valid fields, boxes unticked -> is a checkbox (SMS consent / terms) REQUIRED to register?
+  3. valid fields, boxes unticked -> is a checkbox (SMS consent / terms) REQUIRED to register? (each box tested on its
+     own when there are several; radio questions get one answer each, long text boxes a test sentence)
   4. --submit only: tick boxes, submit for real, record redirect URL, time to redirect and the pixel events that fired.
      Steps 1-3 never submit for real. GHL's "Submission in progress" box (after an unfinished attempt) is closed
      with "Start over" whenever it appears. If the form has an anti-bot check (Cloudflare Turnstile, reCAPTCHA),
@@ -134,7 +135,9 @@ def _values(mode, name, email, phone):
     first, _, last = name.partition(" ")
     if mode == "bad":
         return {"email": "not-an-email", "phone": "123"}, "x"
-    return {"email": email, "phone": phone, "first_name": first, "last_name": last or "Test", "name": name}, "Test"
+    # long free-text answers (application forms) get a clearly-fake sentence instead of "Test"
+    return {"email": email, "phone": phone, "first_name": first, "last_name": last or "Test", "name": name,
+            "long": "Funnel audit test entry. Please delete."}, "Test"
 
 
 def fill(page, fields, mode, name, email, phone):
@@ -142,9 +145,29 @@ def fill(page, fields, mode, name, email, phone):
     vals, default = _values(mode, name, email, phone)
     for attempt in range(4):
         missing = 0
+        picked = set()   # radio groups already answered this round (application forms: one choice per question)
         for f in fields:
             k = f["kind"]
-            if k in ("checkbox", "radio"):
+            if k == "radio":
+                if mode == "bad":
+                    continue
+                group = f.get("name") or f["i"]
+                if group in picked:
+                    continue
+                picked.add(group)
+                loc = page.locator(f'[data-fa-field="{f["i"]}"]').first
+                try:
+                    if f.get("name") and page.locator(f'[data-fa-form] input[type=radio][name="{f["name"]}"]:checked').count():
+                        continue
+                    loc.set_checked(True, force=True)
+                    if not loc.is_checked():
+                        loc.click(force=True)
+                    if not loc.is_checked():
+                        missing += 1
+                except Exception:
+                    missing += 1
+                continue
+            if k == "checkbox":
                 continue
             loc = page.locator(f'[data-fa-field="{f["i"]}"]').first
             try:
@@ -153,6 +176,8 @@ def fill(page, fields, mode, name, email, phone):
                         loc.select_option(index=1)
                     continue
                 want = vals.get(k, default)
+                if k == "text" and f.get("type") == "textarea" and mode != "bad":
+                    want = vals.get("long", default)
                 have = loc.input_value()
                 digits = re.sub(r"\D", "", have)
                 ok = (digits.endswith(re.sub(r"\D", "", want)) and digits) if k == "phone" else have == want
@@ -285,6 +310,24 @@ def run(p, browser, url, device, out, do_submit, name, email, phone, open_text=N
     boxes = [f for f in info["fields"] if f["kind"] == "checkbox"]
     res["steps"]["valid_values_boxes_unticked"] = errs
     res["checkboxes"] = [{"label": f["label"], "required_to_register": blocked} for f in boxes]
+    if blocked and len(boxes) > 1:
+        # Several boxes (e.g. Terms + SMS): test each one alone (that box unticked, the others ticked), so a
+        # required Terms box doesn't make the optional SMS box look required.
+        for b, row in zip(boxes, res["checkboxes"]):
+            try:
+                info = load_form(page, reload=True, open_text=open_text)
+                fill(page, info["fields"], "good", name, email, phone)
+                for f in info["fields"]:
+                    if f["kind"] == "checkbox":
+                        page.locator(f'[data-fa-field="{f["i"]}"]').first.set_checked(f["i"] != b["i"], force=True)
+                before_n = len(gate.sent)
+                row["errors_when_unticked"] = submit(page)
+                row["required_to_register"] = len(gate.sent) == before_n
+            except Exception as e:
+                row["required_to_register"] = None
+                row["error"] = str(e)[:200]
+        blocked = any(r["required_to_register"] for r in res["checkboxes"]
+                      if re.search(r"sms|text message|messag|consent", r["label"], re.I))
     sms = [b for b in res["checkboxes"] if re.search(r"sms|text message|messag|consent", b["label"], re.I)]
     if sms and blocked:
         res.setdefault("findings", []).append(

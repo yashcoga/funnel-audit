@@ -17,6 +17,8 @@ What it does:
      casing, company name and support email consistency, justified text on phones, and the clauses each page type normally needs
      (Privacy: SMS/A2P wording, cookies & pixels, rights; Terms: liability, governing law, results disclaimer;
      Refund: the policy for what this funnel sells and how to ask; Support: a way to reach a person).
+  5. Grant / giveaway funnels: the Terms page that is the giveaway's rules is checked for the official-rules basics
+     (no purchase necessary, dates, eligibility, winner selection and notice, taxes, void where prohibited).
 Missing clauses are "check with the client / their lawyer" items, not legal advice.
 Writes DIR/legal.json and prints a summary plus a ready-made "legal_pages" block for findings.json.
 """
@@ -91,7 +93,24 @@ CLAUSES = {
         ("a way to reach a person (email / phone / form)", r"@|\(\d{3}\)|\d{3}[-. ]\d{3}[-. ]\d{4}|form"),
         ("expected response time", r"within \d+|business days?|hours|24/7|respond"),
     ],
+    # Grant / giveaway / contest funnels (user rule, 2026-11-18): the funnel's own rules page (usually a Terms page
+    # that mentions the grant / winner) needs the "official rules" basics. Missing ones = check with the client/lawyer.
+    "rules": [
+        ("“no purchase necessary” (buying doesn't improve the chances)", r"no purchase (is )?(necessary|required)|(do(es)?|don.t) not require (a|any) purchase|"
+                                                                        r"(do(es)?n.t|do(es)? not) require any purchase|without (a |any )?purchase"),
+        ("entry deadline written out (date + time zone)", rf"(deadline|ends?|closes?|no later than|by|until)\b[^.]{{0,60}}{MONTHS}\.?\s+\d"),
+        ("minimum age", r"\b(18|19|21)\b[^.]{0,40}(years|older|of age)|age of majority"),
+        ("where entrants must live", r"resident|open to (people|residents|anyone) (in|of)"),
+        ("who can't enter (employees, their families)", r"employees?[^.]{0,100}(not eligible|ineligible|excluded|may not|cannot)|immediate family"),
+        ("how the winner is chosen (criteria or drawing)", r"judg|criteria|random(ly)?|drawing|scored?\b"),
+        ("number of winners", r"\b(one|1|two|three|four|five|\d+)\s+(winner|recipient)s?\b|single (winner|recipient)"),
+        ("how and when the winner is told + time to claim", r"notif(y|ied|ication)[^.]{0,160}(within|days|hours)|(fail|fails|unable) to (respond|claim|accept)|alternate (winner|recipient)"),
+        ("taxes (winner pays; W-9 / 1099)", r"\btax(es|able)?\b|w-?9|1099"),
+        ("“void where prohibited”", r"void where prohibited|where prohibited by law"),
+        ("winner announcement date", rf"(announc|reveal|notif)\w*[^.]{{0,80}}{MONTHS}\.?\s+\d"),
+    ],
 }
+GIVEAWAY_RE = re.compile(r"\b(grant|giveaway|sweepstakes?|contest|raffle|prize|winners?)\b", re.I)
 FINANCE_RE = re.compile(r"\btrad(e|ing|er)\b|invest|forex|crypto|stock|options|income|profit|earn", re.I)
 
 
@@ -213,6 +232,7 @@ def main():
         "brands": brand_names(ftext),
         "finance_niche": bool(len(FINANCE_RE.findall(ftext)) >= 5),
         "sms_on_funnel": bool(re.search(r"text messag|\bsms\b", ftext, re.I)),
+        "giveaway": bool(len(GIVEAWAY_RE.findall(ftext)) >= 3),
     }
     footer_issues = [f"{p}: no Privacy link" for p, k in matrix.items() if "privacy" not in k] + \
                     [f"{p}: no Terms link" for p, k in matrix.items() if "terms" not in k]
@@ -295,6 +315,22 @@ def main():
                           "status": dk.get("status"), "final_url": dk.get("final_url"), "title": dk.get("title"),
                           "words": len(re.findall(r"\w+", text)), "findings": F})
         browser.close()
+
+    # 2b. grant / giveaway funnels: the ONE Terms page that is the giveaway's rules (most grant/winner mentions)
+    rules_page = None
+    if facts["giveaway"]:
+        cands = [(len(GIVEAWAY_RE.findall(texts.get(pg["url"], ""))), pg) for pg in pages if pg["kind"] == "terms"]
+        cands = [c for c in cands if c[0] >= 5]
+        if cands:
+            rules_page = max(cands, key=lambda c: c[0])[1]
+            r_missing = [name for name, rx in CLAUSES["rules"] if not re.search(rx, texts[rules_page["url"]], re.I)]
+            rules_page["rules_page"] = True
+            if r_missing:
+                rules_page["findings"].append({"severity": "high", "text":
+                    "Grant / giveaway rules are missing (check with the client or their lawyer): " + "; ".join(r_missing)})
+        else:
+            footer_issues.append("Grant / giveaway funnel but no rules page found (a Terms page that explains the grant, "
+                                 "the winner and how they're chosen). Pass it with --urls if the funnel links it elsewhere.")
 
     # 3. screenshots + standard scan for the other scripts
     if not a.no_scan:

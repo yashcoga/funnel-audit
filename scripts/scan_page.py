@@ -77,6 +77,9 @@ COLLECT_JS = r"""
   for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,span,a,div,label')) {
     if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 2)) continue;
     if (!vis(el)) continue;
+    // visually-hidden helpers (screen-reader / SEO text: 1x1 px, clipped) are not visible text
+    { const rb = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      if (rb.width <= 2 || rb.height <= 2 || /rect\(0(px)?,?\s*0(px)?,?\s*0(px)?,?\s*0(px)?\)|inset\(50%\)/.test(cs.clip + ' ' + cs.clipPath)) continue; }
     const s = getComputedStyle(el); const fg = parse(s.color); if (!fg || fg.a < 0.1) continue;
     const bg = bgOf(el); if (!bg) continue;
     const L1 = lum(fg), L2 = lum(bg); const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);

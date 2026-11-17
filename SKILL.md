@@ -1,6 +1,6 @@
 ---
 name: funnel-audit
-description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review and a full design review (first screen, layout, spacing, type, form polish, images, proof, brand consistency) on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Runs in two modes, quick (every test, no screenshots in the report) or full (with marked-up screenshots). Use when the user says "quick funnel audit", "quick audit", "full funnel audit", "deep audit", "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
+description: Full pre-launch audit of a sales funnel (GoHighLevel, Whop, ClickFunnels or any page builder) from a single starting URL — checks that the root domain opens a real page (a 404 on the bare domain is a launch blocker), walks every page (opt-in → upsell → downsell → thank-you pages; also application / grant / giveaway funnels), clicks every CTA and link on desktop and mobile, submits a test opt-in, places free (total 0.00) test purchases with a 100%-off coupon code, checks that a new funnel replacing a live one keeps the old opt-in URL, form and pixels so running ads and automations don't break, checks Meta/Google/TikTok pixel events, audits every legal page linked in the footer (terms, privacy, refund, support), does a full copy and conversion review and a full design review (first screen, layout, spacing, type, form polish, images, proof, brand consistency) on desktop and mobile, measures page speed, and delivers a clickable HTML report with marked-up screenshots and a ranked fix list. Uses bundled, tested scripts for the mechanical work. Runs in two modes, quick (every test, no screenshots in the report) or full (with marked-up screenshots). Use when the user says "quick funnel audit", "quick audit", "full funnel audit", "deep audit", "audit this funnel", "check this funnel before ads", "funnel QA", "test the flow", "go through the funnel", gives a funnel URL and asks for a check, or says "do the funnel audit" — from any folder.
 ---
 
 # Funnel audit
@@ -11,6 +11,14 @@ GoHighLevel, Whop, ClickFunnels or custom HTML. The question every audit answers
 what has to change first?* "Launch" means it can go live: people can register, buy and reach the right confirmation,
 and nothing on the pages is broken, lost or legally wrong. It does **not** mean "ready to run ads" — see
 "Launch blockers vs highlights" below.
+
+**Also for application / grant / giveaway funnels (user rule, 2026-11-18):** application page → thank-you page
+(often with a second entry step outside the builder, e.g. a video on testimonial.to) → the grant's own terms/rules
+page. Same steps, with these differences: no coupon question and no test purchase when nothing is sold (say so in the
+SOP); the long application form is tested like any form (radio questions and long answers are filled automatically);
+the legal step also checks the rules page for the giveaway basics; one-off deadlines are checked for consistency, not
+for masterclass custom values (step 3b); and the copy review uses the "application / grant" checklist in step 4.
+Open the outside entry step (video page) and check it, but don't submit to it (no fake entries in the judging pool).
 
 ## Two modes: quick and full (user rule, 2026-11-11)
 
@@ -256,6 +264,11 @@ Not a GHL funnel (empty step list)? Walk it by links as before, one batch per ro
   usually means an anti-bot or rate-limit problem on our side, not a broken form. Re-run once with a new `--email`
   (after 10–15 min for a 429); only report the form as broken if a normal browser fails too. Every lead the
   script or you create goes on the clean-up list.
+  **Application forms:** the script picks one answer per radio question, writes "Funnel audit test entry. Please
+  delete." in long text boxes, and fills selects. With several checkboxes (e.g. Terms + SMS) it tests each box on its
+  own (that box unticked, the others ticked), so `required_to_register` is per box. In GHL, a box built as a
+  "Terms & Conditions" field is always required: an SMS consent box built that way is the usual cause of
+  "SMS consent is required" (fix: an optional custom checkbox field).
 - **Upsell / downsell with a Whop checkout:**
   `python "$S/whop_checkout.py" URL --out W/checkout --code CODE --device mobile` (dry run: plan, prices, code,
   whether the checkout is on screen after the "Yes" tap). It also handles checkouts that only load inside a pop-up
@@ -343,6 +356,12 @@ copy checks include them), and writes `W/legal.json` with:
   each page type normally needs (Privacy: SMS carrier wording, cookies & pixels, rights; Terms: liability, governing
   law, results disclaimer, "not financial advice" in finance niches; Refund: a clear rule for what this funnel sells
   and how to ask; Support: a way to reach a person and a response time).
+- **Grant / giveaway rules (user rule, 2026-11-18):** when the funnel pages talk about a grant, giveaway, contest or
+  prize, the Terms page with the most grant/winner mentions is treated as the rules page and checked for: "no purchase
+  necessary", the entry deadline written out with time zone, minimum age, where entrants must live, who can't enter,
+  how the winner is chosen, number of winners, how/when the winner is told and time to claim, taxes (W-9 / 1099),
+  "void where prohibited" and the announcement date. Missing items = one **High · Confirm first** fix for the client
+  and their lawyer. No paid offer? Pass the grant's name to `--offers` so the table shows it's covered.
 
 Then **read every legal page yourself** (the `-desktop-part-N.png` / `-mobile-part-N.png` screenshots and the text in
 `copy-review.md`):
@@ -365,6 +384,11 @@ Report the results in the `legal_pages` section of findings.json (start from `le
 block automated checks; the script says so — don't report those as broken.
 
 ### 3b. Dates and times come from GHL custom values (always)
+
+**One-off deadlines (grant / giveaway / application funnels):** the four tags below are for recurring classes. A
+single fixed deadline may be typed in; check instead that it reads the same on every page (application, thank-you,
+rules, meta description), that the countdown matches it, and that the announcement date/time agrees with the
+client's calendar. Report it in the same "Dates" section with status "Matches" / "Add time" etc.
 
 Every date, day, time and per-class link must come from GoHighLevel custom values, never typed into the page, so
 the next class only needs the custom values changed. The team's **four standard custom values** (the tags never
@@ -448,6 +472,17 @@ table; anything about persuasion goes in the copy & conversion review.
 - Confirms the right date/time/link, tells buyers how they get what they bought ("check your email" is fine, no
   download button needed), gives the next steps in order, and gives a reason to show up live (show-up rate).
   Contradictory re-offers are a highlight, not a blocker.
+
+**Conversion — application / grant pages**
+- Every entry step is named before people apply (e.g. "2 steps: form + short video"), with the deadline and the
+  announcement date, time and place. A hidden second step loses entries.
+- The thank-you page puts the next entry step (video button) on the first screen and never calls a required step
+  optional ("best possible chance").
+- Who can apply (age, country) and why the host is giving the grant are on the page, not only in the terms.
+- Required fields are really needed (e.g. a required Instagram handle shuts out people without one); "how did you
+  hear" answers don't overlap; answer options carry no income framing.
+- The thank-you page gives applicants something to do next (free class, community) and a reason to watch the reveal.
+- The outside entry page (video tool) links to the rules and privacy policy.
 
 **Across the funnel**
 - Message match with the ads (ask for ad copy if available; otherwise list it as a check before launch).
@@ -605,6 +640,12 @@ URL, payment ID and pixel events. If the Playwright MCP isn't installed, the use
   arrives in a headless browser, and without it the click silently sends nothing (or the server answers 429).
   `optin_test.py` detects this and does the one real submit in a short-lived visible browser window. That's
   expected, not a bug.
+- **Grant / application funnels (first audit, 2026-11-18):** the old opt-in script skipped radio questions, so a
+  long application form never sent and every checkbox looked "required". Fixed (radios filled, boxes tested one by
+  one). The scan also flagged a 1×1 px hidden title element as "invisible text" on every page; visually hidden
+  elements are now skipped. The typical misses on these funnels: the second entry step (video) not named on the
+  application page, a required step called optional on the thank-you page, and rules pages without "no purchase
+  necessary", dates, taxes or "void where prohibited".
 - **GHL order forms ask for a card even when the coupon makes the total 0.00** (they save the card for later
   one-click upsells). On a live Stripe account the public test card is then declined ("live mode, but used a known
   test card"), and GHL still creates a pending order to clean up. Not a funnel bug. Stop and ask the user whether
